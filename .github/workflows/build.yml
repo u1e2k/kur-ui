@@ -13,47 +13,27 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Run entire job inside Debian Bookworm container (clean multiarch support for armel)
-    container:
-      image: debian:bookworm-slim
 
     steps:
-      - name: Install dependencies and cross toolchain
+      - name: Install ARM Cross-compiler and SDL headers
         run: |
-          # Eliminate version mismatches from security/updates by pinning to pure bookworm main
-          rm -f /etc/apt/sources.list.d/*
-          echo "deb http://deb.debian.org/debian bookworm main" > /etc/apt/sources.list
-          dpkg --add-architecture armel
-          apt-get update
-          apt-get install -y --no-install-recommends \
-            build-essential \
-            git \
-            zip \
-            ca-certificates \
-            gcc-arm-linux-gnueabi \
-            libc6-dev-armel-cross \
-            libsdl1.2-dev:armel
+          sudo apt-get update
+          sudo apt-get install -y gcc-arm-linux-gnueabi libsdl1.2-dev zip
 
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Configure safe directory and calculate next version
+      - name: Calculate next version tag
         id: versioning
         run: |
-          git config --global --add safe.directory "*"
-
-          # Read Base Major.Minor from VERSION file (e.g. "0.0")
           BASE_VERSION=$(tr -d ' \r\n' < VERSION)
           echo "Base Version prefix: ${BASE_VERSION}"
 
-          # Fetch all remote tags
           git fetch --tags --force || true
 
-          # Find highest existing patch number for this base version
           LATEST_PATCH=$(git tag -l "v${BASE_VERSION}.*" | sed -E "s/^v${BASE_VERSION}\.([0-9]+)$/\1/" | sort -n | tail -n 1)
-
           if [ -z "$LATEST_PATCH" ]; then
             NEXT_PATCH=1
           else
@@ -64,13 +44,39 @@ jobs:
           echo "Computed Release Tag: ${RELEASE_TAG}"
           echo "tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
 
+      - name: Build lightweight SDL stub for ARM linker
+        run: |
+          # Create an interface stub for ARM linker (resolves SDL symbols at link time, binds to real /usr/lib/libSDL.so on device)
+          mkdir -p /tmp/sdl_arm
+          cat << 'EOF' > /tmp/stub_sdl.c
+          #include <SDL/SDL.h>
+          int SDL_Init(Uint32 f) { (void)f; return 0; }
+          void SDL_Quit(void) {}
+          SDL_Surface *SDL_SetVideoMode(int w, int h, int b, Uint32 f) { (void)w;(void)h;(void)b;(void)f; return 0; }
+          void SDL_WM_SetCaption(const char *t, const char *i) { (void)t;(void)i; }
+          int SDL_ShowCursor(int t) { (void)t; return 0; }
+          Uint32 SDL_GetTicks(void) { return 0; }
+          void SDL_Delay(Uint32 ms) { (void)ms; }
+          int SDL_PollEvent(SDL_Event *e) { (void)e; return 0; }
+          int SDL_Flip(SDL_Surface *s) { (void)s; return 0; }
+          int SDL_FillRect(SDL_Surface *d, SDL_Rect *r, Uint32 c) { (void)d;(void)r;(void)c; return 0; }
+          Uint32 SDL_MapRGB(const SDL_PixelFormat *const f, const Uint8 r, const Uint8 g, const Uint8 b) { (void)f;(void)r;(void)g;(void)b; return 0; }
+          int SDL_OpenAudio(SDL_AudioSpec *d, SDL_AudioSpec *o) { (void)d;(void)o; return 0; }
+          void SDL_CloseAudio(void) {}
+          void SDL_PauseAudio(int p) { (void)p; }
+          void SDL_LockAudio(void) {}
+          void SDL_UnlockAudio(void) {}
+          char *SDL_GetError(void) { return ""; }
+          EOF
+          arm-linux-gnueabi-gcc -shared -fPIC -o /tmp/sdl_arm/libSDL.so /tmp/stub_sdl.c
+
       - name: Build KURUI for TRIMUI Model S
         run: |
           make clean
           make CC=arm-linux-gnueabi-gcc \
                VERSION_TAG="${{ steps.versioning.outputs.tag }}" \
                EXTRA_CFLAGS="-I/usr/include/SDL -D_GNU_SOURCE=1 -D_REENTRANT" \
-               EXTRA_LIBS="-L/usr/lib/arm-linux-gnueabi -lSDL -lpthread"
+               EXTRA_LIBS="-L/tmp/sdl_arm -lSDL -lpthread"
           arm-linux-gnueabi-strip kurui
 
       - name: Package Release
