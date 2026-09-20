@@ -21,12 +21,12 @@ typedef struct {
 
 /* Curated 6 games for quick access */
 static const GameEntry g_games[] = {
-    {"[GB]",   "テトリス",           "/mnt/SDCARD/Emus/gb/launch.sh \"/mnt/SDCARD/Roms/gb/tetris.gb\"", "echo [LAUNCH] GB Tetris"},
-    {"[FC]",   "スーパーマリオ",     "/mnt/SDCARD/Emus/fc/launch.sh \"/mnt/SDCARD/Roms/fc/mario.nes\"", "echo [LAUNCH] FC Super Mario"},
-    {"[GBA]",  "ゼルダの伝説",       "/mnt/SDCARD/Emus/gba/launch.sh \"/mnt/SDCARD/Roms/gba/zelda.gba\"", "echo [LAUNCH] GBA Zelda"},
-    {"[GB]",   "ポケットモンスター", "/mnt/SDCARD/Emus/gb/launch.sh \"/mnt/SDCARD/Roms/gb/pokemon.gb\"", "echo [LAUNCH] GB Pokemon"},
-    {"[NGPC]", "メタルスラッグ",     "/mnt/SDCARD/Emus/ngpc/launch.sh \"/mnt/SDCARD/Roms/ngpc/mslug.ngc\"", "echo [LAUNCH] NGPC Metal Slug"},
-    {"[FC]",   "魔界村",             "/mnt/SDCARD/Emus/fc/launch.sh \"/mnt/SDCARD/Roms/fc/makaimura.nes\"", "echo [LAUNCH] FC Makaimura"}
+    {"[GB]",   "TETRIS",                 "/mnt/SDCARD/Emus/gb/launch.sh \"/mnt/SDCARD/Roms/gb/tetris.gb\"", "echo [LAUNCH] GB Tetris"},
+    {"[FC]",   "SUPER MARIO BROS.",      "/mnt/SDCARD/Emus/fc/launch.sh \"/mnt/SDCARD/Roms/fc/mario.nes\"", "echo [LAUNCH] FC Super Mario"},
+    {"[GBA]",  "THE LEGEND OF ZELDA",    "/mnt/SDCARD/Emus/gba/launch.sh \"/mnt/SDCARD/Roms/gba/zelda.gba\"", "echo [LAUNCH] GBA Zelda"},
+    {"[GB]",   "POKEMON RED",            "/mnt/SDCARD/Emus/gb/launch.sh \"/mnt/SDCARD/Roms/gb/pokemon.gb\"", "echo [LAUNCH] GB Pokemon"},
+    {"[NGPC]", "METAL SLUG 1ST MISSION", "/mnt/SDCARD/Emus/ngpc/launch.sh \"/mnt/SDCARD/Roms/ngpc/mslug.ngc\"", "echo [LAUNCH] NGPC Metal Slug"},
+    {"[FC]",   "GHOSTS 'N GOBLINS",      "/mnt/SDCARD/Emus/fc/launch.sh \"/mnt/SDCARD/Roms/fc/makaimura.nes\"", "echo [LAUNCH] FC Ghosts 'n Goblins"}
 };
 #define GAME_COUNT (sizeof(g_games) / sizeof(g_games[0]))
 
@@ -154,42 +154,45 @@ static void draw_menu(SDL_Surface *surface) {
     int status_w = font_get_string_width(status_info, 1);
     font_draw_string(surface, SCREEN_WIDTH - status_w - 8, 9, status_info, col_dim, 1);
 
-    /* 3. Main List (Height: 180px, Y: 27 to 207) */
-    /* Scale 2 (16x16px per character) for crisp, punchy legibility on the 2.0" LCD */
-    int list_start_y = 28;
-    int row_height = 29;
+    /* 3. Main List (Height: 180px, Y: 27 to 205) */
+    /* Clean monospaced Teenage Engineering terminal aesthetic */
+    int list_start_y = 38;
+    int row_height = 27;
 
     for (int i = 0; i < (int)GAME_COUNT; ++i) {
         int item_y = list_start_y + i * row_height;
         int is_selected = (i == g_selected_index);
 
+        char idx_buf[8];
+        snprintf(idx_buf, sizeof(idx_buf), "%02d", i + 1);
+
         if (is_selected) {
             /* Highlight bar */
-            draw_fill_rect(surface, 4, item_y - 2, SCREEN_WIDTH - 8, 25, col_orange);
+            draw_fill_rect(surface, 6, item_y - 6, SCREEN_WIDTH - 12, 21, col_orange);
 
-            /* Arrow indicator */
-            font_draw_string(surface, 8, item_y + 2, ">", col_black, 2);
+            /* Selection Indicator */
+            font_draw_string(surface, 12, item_y, ">", col_black, 1);
 
-            /* Tag & Title in inverted dark text (Scale 2 = 16x16px) */
-            font_draw_string(surface, 26, item_y + 2, g_games[i].tag, col_black, 2);
-            int tag_w = font_get_string_width(g_games[i].tag, 2);
-            font_draw_string(surface, 30 + tag_w, item_y + 2, g_games[i].title, col_black, 2);
+            /* Index, Tag & Title in inverted dark text */
+            font_draw_string(surface, 26, item_y, idx_buf, col_black, 1);
+            font_draw_string(surface, 52, item_y, g_games[i].tag, col_black, 1);
+            font_draw_string(surface, 108, item_y, g_games[i].title, col_black, 1);
         } else {
-            /* Normal item (Scale 2 = 16x16px) */
-            font_draw_string(surface, 26, item_y + 2, g_games[i].tag, col_tag, 2);
-            int tag_w = font_get_string_width(g_games[i].tag, 2);
-            font_draw_string(surface, 30 + tag_w, item_y + 2, g_games[i].title, col_white, 2);
+            /* Normal item */
+            font_draw_string(surface, 26, item_y, idx_buf, col_dim, 1);
+            font_draw_string(surface, 52, item_y, g_games[i].tag, col_tag, 1);
+            font_draw_string(surface, 108, item_y, g_games[i].title, col_white, 1);
         }
     }
 
-    /* 4. Footer (Height: 32px, Y: 208 to 240) */
-    draw_line_h(surface, 0, 208, SCREEN_WIDTH, col_border);
-    draw_fill_rect(surface, 0, 209, SCREEN_WIDTH, 31, col_footer_bg);
+    /* 4. Footer (Height: 34px, Y: 206 to 240) */
+    draw_line_h(surface, 0, 206, SCREEN_WIDTH, col_border);
+    draw_fill_rect(surface, 0, 207, SCREEN_WIDTH, 33, col_footer_bg);
 
     /* Action guides */
-    font_draw_string(surface, 12, 218, "A: 起動", col_white, 1);
-    font_draw_string(surface, 96, 218, "MENU: 純正UI", col_dim, 1);
-    font_draw_string(surface, 212, 218, "ST+SEL: 終了", col_dim, 1);
+    font_draw_string(surface, 12, 218, "A: LAUNCH", col_white, 1);
+    font_draw_string(surface, 106, 218, "MENU: STOCK UI", col_dim, 1);
+    font_draw_string(surface, 222, 218, "ST+SEL: EXIT", col_dim, 1);
 }
 
 int main(int argc, char *argv[]) {
