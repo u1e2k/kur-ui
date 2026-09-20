@@ -67,13 +67,16 @@ TRIMUI Model S (Powkiddy A66) 向け超軽量ランチャー「**KURUI**」を�
 * **原因**:
   * TRIMUI のメインUIは、ZIPが選択されると更新用バイナリ `updateui` を起動する。
   * この `updateui` は Linux の仮想端末（VT）をグラフィックモードに切り替え、`VT_LOCKSWITCH` で**フレームバッファ (`/dev/fb0`) とコンソールを排他ロック**して進捗「00%」を描画する。
-  * 当初「即時起動したい」と考え、スクリプト内で `killall updateui` を実行したところ、`updateui` が正常な終了処理（`FB_LeaveGraphicsMode` / `VT_UNLOCKSWITCH`）を行わずに死に、画面の排他ロックが残ったまま 00% の残像で固まってしまった。
+### トラップ④: 「100%で再起動すると元のUIに戻る」問題と FILEメニューZIPの本質
+* **現象**: インストーラが 100% まで進んで再起動（reboot）したものの、立ち上がってきたのは純正のメインUIで、KURUIが起動しない。
+* **原因**:
+  * TRIMUI の FILE メニューに置く ZIP は、OSのファームウェアを書き換える「インストーラ」ではなく、実質的な**「アプリ起動用ショートカット（ランチャーZIP）」**だった。
+  * TRIMUI の標準ファームウェア（FW 0.106+）は、起動時に SD カードの `trimui_init.sh` を勝手に呼んではくれないため、スクリプト末尾で `reboot` してしまうと純正 MainUI に戻ってしまう。
+  * GMenuNX の起動用 ZIP（`TrimuiUpdate_GMenuNX.zip`）の中身を解析したところ、`updater` スクリプト内で `killall updateui` `killall keymon` を実行した直後、**そのまま即座に `./gmenunx` を起動して画面をテイクオーバーする設計**になっていた。
 * **解決策**:
-  * TRIMUI 公式のプロセス間通信コマンド `notify` を使用する正規フローに修正：
-    1. `notify 10 update "Preparing..."` で進捗を進める。
-    2. ファイルの配置完了後、`notify 100 quit` を送信。
-    3. これを受け取った `updateui` が自身で `FB_LeaveGraphicsMode` と `VT_UNLOCKSWITCH` を呼んでクリーンに終了。
-    4. 直後に `reboot` を実行し、起動フック（`trimui_init.sh`）からまっさらな状態で KURUI を自動起動させる。
+  * `updater` スクリプトから `reboot` を撤廃。
+  * ZIP実行時にバイナリを同期した上で、即座に `killall updateui` して `./kurui` を直接画面に起動するフローに改修。
+  * これにより、ユーザーが FILE メニューから ZIP を選択した瞬間に KURUI が即座に画面へ立ち上がり、START+SELECT 等で終了した際は純正 MainUI へ安全に戻る理想的な挙動を実現。
 
 ### トラップ⑤: MicroSD カードのディレクトリ名大文字小文字問題
 * **現象**: Windows (FAT32) 上では大文字小文字が区別されないが、実機の Linux 上では `/mnt/SDCARD/Apps` と `/mnt/SDCARD/apps` が別物として扱われる。
