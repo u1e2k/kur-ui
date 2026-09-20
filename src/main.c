@@ -187,8 +187,8 @@ static void draw_menu(SDL_Surface *surface) {
 
     /* Action guides */
     font_draw_string(surface, 10, 218, "A: 起動", col_white, 1);
-    font_draw_string(surface, 90, 218, "B: 電源OFF", col_dim, 1);
-    font_draw_string(surface, 200, 218, "ST+SEL: 終了", col_dim, 1);
+    font_draw_string(surface, 90, 218, "MENU: 純正UI", col_dim, 1);
+    font_draw_string(surface, 210, 218, "ST+SEL: 終了", col_dim, 1);
 }
 
 int main(int argc, char *argv[]) {
@@ -219,9 +219,9 @@ int main(int argc, char *argv[]) {
                 if (key == SDLK_RETURN) g_key_start = 1;
                 if (key == SDLK_RCTRL || key == SDLK_SPACE || key == SDLK_RSHIFT) g_key_select = 1;
 
-                /* START + SELECT simultaneous press -> Exit */
+                /* START + SELECT simultaneous press -> Exit safely to MainUI */
                 if (g_key_start && g_key_select) {
-                    printf("[KURUI] START + SELECT detected. Exiting safely...\n");
+                    printf("[KURUI] START + SELECT detected. Exiting safely to stock MainUI...\n");
                     running = 0;
                     break;
                 }
@@ -245,18 +245,19 @@ int main(int argc, char *argv[]) {
                     else if (key == SDLK_LCTRL || key == SDLK_z || (!g_key_select && key == SDLK_RETURN)) {
                         launch_game(g_selected_index);
                     }
-                    /* B Button (Power Off / Exit): LALT on TRIMUI, 'x' or Escape on PC */
-                    else if (key == SDLK_LALT || key == SDLK_x || key == SDLK_ESCAPE) {
-                        printf("[KURUI] B Button pressed. Shutting down...\n");
-                        if (is_trimui_hardware()) {
-                            system("poweroff");
-                        }
+                    /* MENU Button (Exit to Stock MainUI): ESCAPE on TRIMUI and PC */
+                    else if (key == SDLK_ESCAPE) {
+                        printf("[KURUI] MENU button pressed. Returning cleanly to stock MainUI...\n");
                         running = 0;
                         break;
                     }
+                    /* B Button (Cancel / No-op): LALT on TRIMUI, 'x' on PC - prevents accidental shutdown */
+                    else if (key == SDLK_LALT || key == SDLK_x) {
+                        printf("[KURUI] B Button pressed (Cancel/No-op).\n");
+                    }
                 } else if (g_state == STATE_BOOT) {
                     /* Any key press skips boot animation directly to menu */
-                    if (key == SDLK_RETURN || key == SDLK_SPACE || key == SDLK_LCTRL || key == SDLK_z) {
+                    if (key == SDLK_RETURN || key == SDLK_SPACE || key == SDLK_LCTRL || key == SDLK_z || key == SDLK_ESCAPE) {
                         g_state = STATE_MENU;
                     }
                 }
