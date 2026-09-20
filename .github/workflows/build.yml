@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   build-and-release:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
@@ -31,7 +31,6 @@ jobs:
           git fetch --tags --force
 
           # Find highest existing patch number for this base version
-          # Filter for tags matching v${BASE_VERSION}.<number>
           LATEST_PATCH=$(git tag -l "v${BASE_VERSION}.*" | sed -E "s/^v${BASE_VERSION}\.([0-9]+)$/\1/" | sort -n | tail -n 1)
 
           if [ -z "$LATEST_PATCH" ]; then
@@ -44,34 +43,30 @@ jobs:
           echo "Computed Release Tag: ${RELEASE_TAG}"
           echo "tag=${RELEASE_TAG}" >> "$GITHUB_OUTPUT"
 
-      - name: Setup ARM Cross-compiler and Multiarch SDL 1.2
+      - name: Build KURUI (ARMv5TE via Debian Bullseye)
         run: |
-          sudo dpkg --add-architecture armel
-          sudo tee /etc/apt/sources.list.d/armel-ports.list <<EOF
-          deb [arch=armel] http://ports.ubuntu.com/ubuntu-ports jammy main universe
-          deb [arch=armel] http://ports.ubuntu.com/ubuntu-ports jammy-updates main universe
-          deb [arch=armel] http://ports.ubuntu.com/ubuntu-ports jammy-security main universe
-          EOF
-          sudo sed -i 's/^deb http/deb [arch=amd64] http/g' /etc/apt/sources.list
-          
-          sudo apt-get update
-          sudo apt-get install -y \
-            gcc-arm-linux-gnueabi \
-            binutils-arm-linux-gnueabi \
-            libsdl1.2-dev:armel \
-            zip
-
-      - name: Build KURUI (ARMv5TE)
-        run: |
-          make clean
-          make CC=arm-linux-gnueabi-gcc \
-               VERSION_TAG="${{ steps.versioning.outputs.tag }}" \
-               SDL_CFLAGS="-I/usr/include/SDL -I/usr/include/arm-linux-gnueabi/SDL -D_GNU_SOURCE=1 -D_REENTRANT" \
-               SDL_LIBS="-L/usr/lib/arm-linux-gnueabi -lSDL -lpthread -lm"
-          make strip CROSS_COMPILE=arm-linux-gnueabi-
+          # Use official Debian Bullseye container where armel (ARMv5TE) & libsdl1.2-dev are fully supported
+          docker run --rm -v "$(pwd):/work" -w /work debian:bullseye bash -c "
+            set -ex
+            dpkg --add-architecture armel
+            apt-get update
+            apt-get install -y --no-install-recommends \
+              gcc-arm-linux-gnueabi \
+              binutils-arm-linux-gnueabi \
+              libc6-dev-armel-cross \
+              libsdl1.2-dev:armel \
+              make
+            make clean
+            make CC=arm-linux-gnueabi-gcc \
+                 VERSION_TAG='${{ steps.versioning.outputs.tag }}' \
+                 SDL_CFLAGS=\"-I/usr/include/SDL -D_GNU_SOURCE=1 -D_REENTRANT\" \
+                 SDL_LIBS=\"-lSDL -lpthread -lm\"
+            arm-linux-gnueabi-strip kurui
+          "
 
       - name: Package trimui_kurui.zip
         run: |
+          sudo apt-get update && sudo apt-get install -y zip
           mkdir -p dist/apps/kurui
           cp kurui dist/apps/kurui/
           cp scripts/trimui_init.sh dist/
