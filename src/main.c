@@ -5,30 +5,21 @@
 #include "font.h"
 #include "sound.h"
 #include "boot.h"
+#include "theme.h"
+#include "hw.h"
+#include "rom_scanner.h"
 
 #define SCREEN_WIDTH  320
 #define SCREEN_HEIGHT 240
 #define TARGET_FPS    60
 #define FRAME_DELAY   (1000 / TARGET_FPS)
+#define VISIBLE_ROWS  6
 
-/* Static Game List Entry */
-typedef struct {
-    const char *tag;        /* Console tag, e.g., "[GB]" */
-    const char *title;      /* Title in UTF-8 */
-    const char *cmd_trimui; /* Actual launch script on TRIMUI */
-    const char *cmd_pc;     /* Fallback dummy command for PC */
-} GameEntry;
-
-/* Curated 6 games for quick access */
-static const GameEntry g_games[] = {
-    {"[GB]",   "TETRIS",                 "/mnt/SDCARD/Emus/gb/launch.sh \"/mnt/SDCARD/Roms/gb/tetris.gb\"", "echo [LAUNCH] GB Tetris"},
-    {"[FC]",   "SUPER MARIO BROS.",      "/mnt/SDCARD/Emus/fc/launch.sh \"/mnt/SDCARD/Roms/fc/mario.nes\"", "echo [LAUNCH] FC Super Mario"},
-    {"[GBA]",  "THE LEGEND OF ZELDA",    "/mnt/SDCARD/Emus/gba/launch.sh \"/mnt/SDCARD/Roms/gba/zelda.gba\"", "echo [LAUNCH] GBA Zelda"},
-    {"[GB]",   "POKEMON RED",            "/mnt/SDCARD/Emus/gb/launch.sh \"/mnt/SDCARD/Roms/gb/pokemon.gb\"", "echo [LAUNCH] GB Pokemon"},
-    {"[NGPC]", "METAL SLUG 1ST MISSION", "/mnt/SDCARD/Emus/ngpc/launch.sh \"/mnt/SDCARD/Roms/ngpc/mslug.ngc\"", "echo [LAUNCH] NGPC Metal Slug"},
-    {"[FC]",   "GHOSTS 'N GOBLINS",      "/mnt/SDCARD/Emus/fc/launch.sh \"/mnt/SDCARD/Roms/fc/makaimura.nes\"", "echo [LAUNCH] FC Ghosts 'n Goblins"}
-};
-#define GAME_COUNT (sizeof(g_games) / sizeof(g_games[0]))
+/* Dynamic Scanned Game List */
+static ScannedGame g_games[MAX_SCANNED_GAMES];
+static int g_game_count = 0;
+static int g_selected_index = 0;
+static int g_scroll_offset = 0;
 
 /* UI State */
 typedef enum {
@@ -39,12 +30,12 @@ typedef enum {
 } AppState;
 
 static AppState g_state = STATE_BOOT;
-static int g_selected_index = 0;
+
 static int g_sys_menu_index = 0;
 #define SYS_MENU_COUNT 4
 
 static int g_settings_index = 0;
-#define SETTINGS_COUNT 4
+#define SETTINGS_COUNT 5
 
 static SDL_Surface *g_screen = NULL;
 
@@ -52,14 +43,17 @@ static SDL_Surface *g_screen = NULL;
 static int g_key_start = 0;
 static int g_key_select = 0;
 
-/* Check if running on TRIMUI hardware */
-static int is_trimui_hardware(void) {
-    FILE *f = fopen("/mnt/SDCARD", "r");
-    if (f) {
-        fclose(f);
-        return 1;
+/* Scan / Rescan ROMs */
+static void scan_for_roms(void) {
+    printf("[KURUI] Scanning for ROMs in /mnt/SDCARD/Roms/...\n");
+    g_game_count = rom_scanner_scan("/mnt/SDCARD/Roms", g_games, MAX_SCANNED_GAMES);
+    if (g_game_count <= 0) {
+        printf("[KURUI] No ROMs found, loading curated fallback titles...\n");
+        rom_scanner_load_defaults(g_games, &g_game_count);
     }
-    return 0;
+    printf("[KURUI] Total games available: %d\n", g_game_count);
+    g_selected_index = 0;
+    g_scroll_offset = 0;
 }
 
 /*
@@ -71,8 +65,7 @@ static int init_subsystems(void) {
         return -1;
     }
 
-    /* TRIMUI uses 16-bit framebuffer (fb0). PC default is typically 32-bit. */
-    /* SDL_SWSURFACE with double buffering */
+    /* Double-buffered software surface */
     g_screen = SDL_SetVideoMode(SCREEN_WIDTH, SCREEN_HEIGHT, 0, SDL_SWSURFACE);
     if (!g_screen) {
         fprintf(stderr, "SDL_SetVideoMode failed: %s\n", SDL_GetError());
@@ -107,20 +100,17 @@ static void shutdown_subsystems(void) {
  * Cleanly destroys SDL completely via SDL_Quit(), executes command, and re-inits on return.
  */
 static void launch_game(int index) {
-    if (index < 0 || index >= (int)GAME_COUNT) return;
+    if (index < 0 || index >= g_game_count) return;
 
-    const GameEntry *game = &g_games[index];
-    int on_trimui = is_trimui_hardware();
-    const char *cmd = on_trimui ? game->cmd_trimui : game->cmd_pc;
-
-    printf("[KURUI] Completely shutting down SDL before launching: %s\n", game->title);
+    const ScannedGame *game = &g_games[index];
+    printf("[KURUI] Shutting down SDL before launching: %s\n", game->title);
 
     /* 1. Full teardown of SDL */
     shutdown_subsystems();
 
     /* 2. Execute target command via system() */
-    printf("[KURUI] Executing: %s\n", cmd);
-    int ret = system(cmd);
+    printf("[KURUI] Executing: %s\n", game->cmd);
+    int ret = system(game->cmd);
     (void)ret;
 
     /* 3. Re-initialize SDL video & audio after return */
@@ -135,16 +125,18 @@ static void launch_game(int index) {
  * Draw Industrial Menu Screen (320x240)
  */
 static void draw_menu(SDL_Surface *surface) {
-    /* Palette definition mapped through surface format */
-    Uint32 col_bg        = SDL_MapRGB(surface->format, 20, 20, 23);       /* Matte Dark */
-    Uint32 col_header_bg = SDL_MapRGB(surface->format, 28, 28, 33);       /* Header Dark */
-    Uint32 col_footer_bg = SDL_MapRGB(surface->format, 24, 24, 28);       /* Footer Dark */
-    Uint32 col_border    = SDL_MapRGB(surface->format, 50, 50, 58);       /* Divider */
-    Uint32 col_orange    = SDL_MapRGB(surface->format, 255, 85, 0);       /* Accent TE Orange */
-    Uint32 col_white     = SDL_MapRGB(surface->format, 245, 245, 245);    /* Pure White */
-    Uint32 col_tag       = SDL_MapRGB(surface->format, 160, 160, 170);    /* Muted Tag */
-    Uint32 col_dim       = SDL_MapRGB(surface->format, 120, 120, 130);    /* Dim text */
-    Uint32 col_black     = SDL_MapRGB(surface->format, 15, 15, 15);       /* Inverted text */
+    const Theme *theme = theme_get();
+
+    Uint32 col_bg        = SDL_MapRGB(surface->format, theme->bg_r, theme->bg_g, theme->bg_b);
+    Uint32 col_header_bg = SDL_MapRGB(surface->format, theme->header_bg_r, theme->header_bg_g, theme->header_bg_b);
+    Uint32 col_footer_bg = SDL_MapRGB(surface->format, theme->footer_bg_r, theme->footer_bg_g, theme->footer_bg_b);
+    Uint32 col_border    = SDL_MapRGB(surface->format, theme->border_r, theme->border_g, theme->border_b);
+    Uint32 col_accent    = SDL_MapRGB(surface->format, theme->accent_r, theme->accent_g, theme->accent_b);
+    Uint32 col_text_pri  = SDL_MapRGB(surface->format, theme->text_primary_r, theme->text_primary_g, theme->text_primary_b);
+    Uint32 col_text_dim  = SDL_MapRGB(surface->format, theme->text_dim_r, theme->text_dim_g, theme->text_dim_b);
+    Uint32 col_text_tag  = SDL_MapRGB(surface->format, theme->text_tag_r, theme->text_tag_g, theme->text_tag_b);
+    Uint32 col_text_inv  = SDL_MapRGB(surface->format, theme->text_inv_r, theme->text_inv_g, theme->text_inv_b);
+    Uint32 col_highlight = SDL_MapRGB(surface->format, theme->highlight_r, theme->highlight_g, theme->highlight_b);
 
     /* 1. Full Surface Clear */
     SDL_FillRect(surface, NULL, col_bg);
@@ -154,21 +146,34 @@ static void draw_menu(SDL_Surface *surface) {
     draw_line_h(surface, 0, 26, SCREEN_WIDTH, col_border);
 
     /* Header text (Bold KURUI in scale 2) */
-    font_draw_string(surface, 8, 5, "KURUI", col_orange, 2);
-    font_draw_string(surface, 96, 9, "// SELECT", col_white, 1);
+    font_draw_string(surface, 8, 5, "KURUI", col_accent, 2);
+    font_draw_string(surface, 96, 9, "// SELECT", col_text_pri, 1);
 
     /* Battery & Clock right aligned */
-    const char *status_info = "[85%] 12:00";
+    char status_info[32];
+    char time_str[16];
+    hw_get_time_str(time_str, sizeof(time_str));
+    int bat = hw_get_battery_percent();
+    int charging = hw_is_charging();
+    if (charging) {
+        snprintf(status_info, sizeof(status_info), "[CHG %d%%] %s", bat, time_str);
+    } else {
+        snprintf(status_info, sizeof(status_info), "[%d%%] %s", bat, time_str);
+    }
+
     int status_w = font_get_string_width(status_info, 1);
-    font_draw_string(surface, SCREEN_WIDTH - status_w - 8, 9, status_info, col_dim, 1);
+    font_draw_string(surface, SCREEN_WIDTH - status_w - 8, 9, status_info, col_text_dim, 1);
 
     /* 3. Main List (Height: 180px, Y: 27 to 205) */
-    /* Clean monospaced Teenage Engineering terminal aesthetic */
     int list_start_y = 38;
     int row_height = 27;
 
-    for (int i = 0; i < (int)GAME_COUNT; ++i) {
-        int item_y = list_start_y + i * row_height;
+    int end_row = g_scroll_offset + VISIBLE_ROWS;
+    if (end_row > g_game_count) end_row = g_game_count;
+
+    for (int i = g_scroll_offset; i < end_row; ++i) {
+        int row_idx = i - g_scroll_offset;
+        int item_y = list_start_y + row_idx * row_height;
         int is_selected = (i == g_selected_index);
 
         char idx_buf[8];
@@ -176,53 +181,73 @@ static void draw_menu(SDL_Surface *surface) {
 
         if (is_selected) {
             /* Highlight bar */
-            draw_fill_rect(surface, 6, item_y - 6, SCREEN_WIDTH - 12, 21, col_orange);
+            draw_fill_rect(surface, 6, item_y - 6, SCREEN_WIDTH - 20, 21, col_highlight);
 
             /* Selection Indicator */
-            font_draw_string(surface, 12, item_y, ">", col_black, 1);
+            font_draw_string(surface, 12, item_y, ">", col_text_inv, 1);
 
             /* Index, Tag & Title in inverted dark text */
-            font_draw_string(surface, 26, item_y, idx_buf, col_black, 1);
-            font_draw_string(surface, 52, item_y, g_games[i].tag, col_black, 1);
-            font_draw_string(surface, 108, item_y, g_games[i].title, col_black, 1);
+            font_draw_string(surface, 26, item_y, idx_buf, col_text_inv, 1);
+            font_draw_string(surface, 52, item_y, g_games[i].tag, col_text_inv, 1);
+            font_draw_string(surface, 108, item_y, g_games[i].title, col_text_inv, 1);
         } else {
             /* Normal item */
-            font_draw_string(surface, 26, item_y, idx_buf, col_dim, 1);
-            font_draw_string(surface, 52, item_y, g_games[i].tag, col_tag, 1);
-            font_draw_string(surface, 108, item_y, g_games[i].title, col_white, 1);
+            font_draw_string(surface, 26, item_y, idx_buf, col_text_dim, 1);
+            font_draw_string(surface, 52, item_y, g_games[i].tag, col_text_tag, 1);
+            font_draw_string(surface, 108, item_y, g_games[i].title, col_text_pri, 1);
         }
+    }
+
+    /* 3.5 Teenage Engineering Slim Scroll Indicator */
+    if (g_game_count > VISIBLE_ROWS) {
+        int track_x = SCREEN_WIDTH - 8;
+        int track_y = 34;
+        int track_h = 166;
+        draw_line_v(surface, track_x + 1, track_y, track_h, col_border);
+
+        int thumb_h = (VISIBLE_ROWS * track_h) / g_game_count;
+        if (thumb_h < 10) thumb_h = 10;
+        int max_scroll = g_game_count - VISIBLE_ROWS;
+        int thumb_y = track_y + (g_scroll_offset * (track_h - thumb_h)) / max_scroll;
+        draw_fill_rect(surface, track_x, thumb_y, 3, thumb_h, col_accent);
     }
 
     /* 4. Footer (Height: 34px, Y: 206 to 240) */
     draw_line_h(surface, 0, 206, SCREEN_WIDTH, col_border);
     draw_fill_rect(surface, 0, 207, SCREEN_WIDTH, 33, col_footer_bg);
 
-    /* Action guides (clean two-column layout) */
-    font_draw_string(surface, 14, 218, "A: LAUNCH", col_white, 1);
-    font_draw_string(surface, 222, 218, "ST+SEL: EXIT", col_dim, 1);
+    /* Action guides */
+    font_draw_string(surface, 14, 218, "A: LAUNCH", col_text_pri, 1);
+
+    char page_info[32];
+    snprintf(page_info, sizeof(page_info), "%d/%d", g_selected_index + 1, g_game_count);
+    font_draw_string(surface, 136, 218, page_info, col_text_dim, 1);
+
+    font_draw_string(surface, 222, 218, "ST+SEL: EXIT", col_text_dim, 1);
 }
 
 /*
  * Draw System Menu Modal (Centered dialog on top of main menu)
  */
 static void draw_sys_menu(SDL_Surface *surface) {
-    /* Base game list drawn underneath */
     draw_menu(surface);
 
-    /* Modal card dimensions: 230x136 */
+    const Theme *theme = theme_get();
+
     int card_w = 230;
     int card_h = 136;
     int card_x = (SCREEN_WIDTH - card_w) / 2;
     int card_y = (SCREEN_HEIGHT - card_h) / 2;
 
-    Uint32 col_card_bg   = SDL_MapRGB(surface->format, 16, 16, 20);
-    Uint32 col_card_head = SDL_MapRGB(surface->format, 28, 28, 34);
-    Uint32 col_border    = SDL_MapRGB(surface->format, 255, 85, 0); /* TE Orange border */
-    Uint32 col_div       = SDL_MapRGB(surface->format, 50, 50, 60);
-    Uint32 col_orange    = SDL_MapRGB(surface->format, 255, 85, 0);
-    Uint32 col_white     = SDL_MapRGB(surface->format, 245, 245, 245);
-    Uint32 col_dim       = SDL_MapRGB(surface->format, 130, 130, 140);
-    Uint32 col_black     = SDL_MapRGB(surface->format, 15, 15, 15);
+    Uint32 col_card_bg   = SDL_MapRGB(surface->format, theme->card_bg_r, theme->card_bg_g, theme->card_bg_b);
+    Uint32 col_card_head = SDL_MapRGB(surface->format, theme->card_header_r, theme->card_header_g, theme->card_header_b);
+    Uint32 col_border    = SDL_MapRGB(surface->format, theme->accent_r, theme->accent_g, theme->accent_b);
+    Uint32 col_div       = SDL_MapRGB(surface->format, theme->border_r, theme->border_g, theme->border_b);
+    Uint32 col_accent    = SDL_MapRGB(surface->format, theme->accent_r, theme->accent_g, theme->accent_b);
+    Uint32 col_text_pri  = SDL_MapRGB(surface->format, theme->text_primary_r, theme->text_primary_g, theme->text_primary_b);
+    Uint32 col_text_dim  = SDL_MapRGB(surface->format, theme->text_dim_r, theme->text_dim_g, theme->text_dim_b);
+    Uint32 col_text_inv  = SDL_MapRGB(surface->format, theme->text_inv_r, theme->text_inv_g, theme->text_inv_b);
+    Uint32 col_highlight = SDL_MapRGB(surface->format, theme->highlight_r, theme->highlight_g, theme->highlight_b);
 
     /* Card background & Orange border */
     draw_fill_rect(surface, card_x, card_y, card_w, card_h, col_card_bg);
@@ -231,7 +256,7 @@ static void draw_sys_menu(SDL_Surface *surface) {
     /* Modal header (Height: 24px) */
     draw_fill_rect(surface, card_x + 1, card_y + 1, card_w - 2, 23, col_card_head);
     draw_line_h(surface, card_x, card_y + 24, card_w, col_div);
-    font_draw_string(surface, card_x + 10, card_y + 8, "// SYSTEM MENU", col_orange, 1);
+    font_draw_string(surface, card_x + 10, card_y + 8, "// SYSTEM MENU", col_accent, 1);
 
     /* Options */
     static const char *options[SYS_MENU_COUNT] = {
@@ -249,40 +274,41 @@ static void draw_sys_menu(SDL_Surface *surface) {
         int is_selected = (i == g_sys_menu_index);
 
         if (is_selected) {
-            draw_fill_rect(surface, card_x + 6, item_y - 2, card_w - 12, 16, col_orange);
-            font_draw_string(surface, card_x + 12, item_y + 2, ">", col_black, 1);
-            font_draw_string(surface, card_x + 24, item_y + 2, options[i], col_black, 1);
+            draw_fill_rect(surface, card_x + 6, item_y - 2, card_w - 12, 16, col_highlight);
+            font_draw_string(surface, card_x + 12, item_y + 2, ">", col_text_inv, 1);
+            font_draw_string(surface, card_x + 24, item_y + 2, options[i], col_text_inv, 1);
         } else {
-            font_draw_string(surface, card_x + 24, item_y + 2, options[i], col_white, 1);
+            font_draw_string(surface, card_x + 24, item_y + 2, options[i], col_text_pri, 1);
         }
     }
 
     /* Modal footer */
     draw_line_h(surface, card_x, card_y + card_h - 22, card_w, col_div);
-    font_draw_string(surface, card_x + 14, card_y + card_h - 14, "A: SELECT    B/MENU: BACK", col_dim, 1);
+    font_draw_string(surface, card_x + 14, card_y + card_h - 14, "A: SELECT    B/MENU: BACK", col_text_dim, 1);
 }
 
 /*
  * Draw Settings Menu Modal (Centered dialog on top of main menu)
  */
 static void draw_settings_menu(SDL_Surface *surface) {
-    /* Base game list drawn underneath */
     draw_menu(surface);
 
-    /* Modal card dimensions: 250x146 */
-    int card_w = 250;
-    int card_h = 146;
+    const Theme *theme = theme_get();
+
+    int card_w = 260;
+    int card_h = 160;
     int card_x = (SCREEN_WIDTH - card_w) / 2;
     int card_y = (SCREEN_HEIGHT - card_h) / 2;
 
-    Uint32 col_card_bg   = SDL_MapRGB(surface->format, 16, 16, 20);
-    Uint32 col_card_head = SDL_MapRGB(surface->format, 28, 28, 34);
-    Uint32 col_border    = SDL_MapRGB(surface->format, 255, 85, 0); /* TE Orange border */
-    Uint32 col_div       = SDL_MapRGB(surface->format, 50, 50, 60);
-    Uint32 col_orange    = SDL_MapRGB(surface->format, 255, 85, 0);
-    Uint32 col_white     = SDL_MapRGB(surface->format, 245, 245, 245);
-    Uint32 col_dim       = SDL_MapRGB(surface->format, 130, 130, 140);
-    Uint32 col_black     = SDL_MapRGB(surface->format, 15, 15, 15);
+    Uint32 col_card_bg   = SDL_MapRGB(surface->format, theme->card_bg_r, theme->card_bg_g, theme->card_bg_b);
+    Uint32 col_card_head = SDL_MapRGB(surface->format, theme->card_header_r, theme->card_header_g, theme->card_header_b);
+    Uint32 col_border    = SDL_MapRGB(surface->format, theme->accent_r, theme->accent_g, theme->accent_b);
+    Uint32 col_div       = SDL_MapRGB(surface->format, theme->border_r, theme->border_g, theme->border_b);
+    Uint32 col_accent    = SDL_MapRGB(surface->format, theme->accent_r, theme->accent_g, theme->accent_b);
+    Uint32 col_text_pri  = SDL_MapRGB(surface->format, theme->text_primary_r, theme->text_primary_g, theme->text_primary_b);
+    Uint32 col_text_dim  = SDL_MapRGB(surface->format, theme->text_dim_r, theme->text_dim_g, theme->text_dim_b);
+    Uint32 col_text_inv  = SDL_MapRGB(surface->format, theme->text_inv_r, theme->text_inv_g, theme->text_inv_b);
+    Uint32 col_highlight = SDL_MapRGB(surface->format, theme->highlight_r, theme->highlight_g, theme->highlight_b);
 
     /* Card background & Orange border */
     draw_fill_rect(surface, card_x, card_y, card_w, card_h, col_card_bg);
@@ -291,49 +317,58 @@ static void draw_settings_menu(SDL_Surface *surface) {
     /* Modal header (Height: 24px) */
     draw_fill_rect(surface, card_x + 1, card_y + 1, card_w - 2, 23, col_card_head);
     draw_line_h(surface, card_x, card_y + 24, card_w, col_div);
-    font_draw_string(surface, card_x + 10, card_y + 8, "// SETTINGS", col_orange, 1);
+    font_draw_string(surface, card_x + 10, card_y + 8, "// SETTINGS", col_accent, 1);
 
-    char sound_opt[32];
+    char theme_opt[36];
+    snprintf(theme_opt, sizeof(theme_opt), "THEME       : [%s]", theme_get_name());
+
+    char sound_opt[36];
     snprintf(sound_opt, sizeof(sound_opt), "SOUND FX    : [%s]", sound_is_enabled() ? "ENABLED" : "MUTED");
 
-    char ver_opt[32];
-    snprintf(ver_opt, sizeof(ver_opt), "VERSION     : %s", KURUI_VERSION);
+    char count_opt[36];
+    snprintf(count_opt, sizeof(count_opt), "ROMS LOADED : [%d TITLES]", g_game_count);
 
     const char *settings_opts[SETTINGS_COUNT] = {
+        theme_opt,
         sound_opt,
-        "PLATFORM    : TRIMUI S (32MB)",
-        ver_opt,
+        count_opt,
+        "RE-SCAN ROMS",
         "< BACK TO SYSTEM MENU"
     };
 
     int item_start_y = card_y + 34;
-    int row_h = 20;
+    int row_h = 19;
 
     for (int i = 0; i < SETTINGS_COUNT; ++i) {
         int item_y = item_start_y + i * row_h;
         int is_selected = (i == g_settings_index);
 
         if (is_selected) {
-            draw_fill_rect(surface, card_x + 6, item_y - 2, card_w - 12, 17, col_orange);
-            font_draw_string(surface, card_x + 10, item_y + 2, ">", col_black, 1);
-            font_draw_string(surface, card_x + 22, item_y + 2, settings_opts[i], col_black, 1);
+            draw_fill_rect(surface, card_x + 6, item_y - 2, card_w - 12, 16, col_highlight);
+            font_draw_string(surface, card_x + 10, item_y + 2, ">", col_text_inv, 1);
+            font_draw_string(surface, card_x + 22, item_y + 2, settings_opts[i], col_text_inv, 1);
         } else {
-            font_draw_string(surface, card_x + 22, item_y + 2, settings_opts[i], col_white, 1);
+            font_draw_string(surface, card_x + 22, item_y + 2, settings_opts[i], col_text_pri, 1);
         }
     }
 
     /* Modal footer */
     draw_line_h(surface, card_x, card_y + card_h - 22, card_w, col_div);
-    font_draw_string(surface, card_x + 14, card_y + card_h - 14, "A: TOGGLE/OK    B: BACK", col_dim, 1);
+    font_draw_string(surface, card_x + 14, card_y + card_h - 14, "A: CHANGE/OK    B: BACK", col_text_dim, 1);
 }
 
 int main(int argc, char *argv[]) {
     (void)argc;
     (void)argv;
 
+    theme_init();
+
     if (init_subsystems() < 0) {
         return 1;
     }
+
+    /* Scan ROMs */
+    scan_for_roms();
 
     boot_init();
     g_state = STATE_BOOT;
@@ -368,13 +403,25 @@ int main(int argc, char *argv[]) {
                         if (g_selected_index > 0) {
                             g_selected_index--;
                         } else {
-                            g_selected_index = (int)GAME_COUNT - 1;
+                            g_selected_index = g_game_count - 1;
+                        }
+                        /* Adjust scroll offset */
+                        if (g_selected_index < g_scroll_offset) {
+                            g_scroll_offset = g_selected_index;
+                        } else if (g_selected_index >= g_scroll_offset + VISIBLE_ROWS) {
+                            g_scroll_offset = g_selected_index - VISIBLE_ROWS + 1;
                         }
                     } else if (key == SDLK_DOWN) {
-                        if (g_selected_index < (int)GAME_COUNT - 1) {
+                        if (g_selected_index < g_game_count - 1) {
                             g_selected_index++;
                         } else {
                             g_selected_index = 0;
+                        }
+                        /* Adjust scroll offset */
+                        if (g_selected_index < g_scroll_offset) {
+                            g_scroll_offset = g_selected_index;
+                        } else if (g_selected_index >= g_scroll_offset + VISIBLE_ROWS) {
+                            g_scroll_offset = g_selected_index - VISIBLE_ROWS + 1;
                         }
                     }
                     /* A Button (Confirm / Launch): LCTRL on TRIMUI, 'z' or Return on PC */
@@ -434,12 +481,20 @@ int main(int argc, char *argv[]) {
                     /* A Button */
                     else if (key == SDLK_LCTRL || key == SDLK_z || (!g_key_select && key == SDLK_RETURN)) {
                         if (g_settings_index == 0) {
+                            /* Cycle theme */
+                            theme_cycle_next();
+                            sound_trigger_pikoon();
+                        } else if (g_settings_index == 1) {
                             /* Toggle sound */
                             sound_set_enabled(!sound_is_enabled());
                             if (sound_is_enabled()) {
                                 sound_trigger_pikoon();
                             }
                         } else if (g_settings_index == 3) {
+                            /* Re-scan ROMs */
+                            scan_for_roms();
+                            sound_trigger_pikoon();
+                        } else if (g_settings_index == 4) {
                             /* BACK */
                             g_state = STATE_SYS_MENU;
                         }
