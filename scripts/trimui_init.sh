@@ -7,7 +7,7 @@ APP_DIR="/mnt/SDCARD/apps/kurui"
 if [ -d "$APP_DIR" ] && [ -f "$APP_DIR/kurui" ]; then
     cd "$APP_DIR"
     chmod +x ./kurui
-    # Replace the current shell process with kurui
+    # Replace current shell process with kurui
     exec ./kurui
 fi
 
