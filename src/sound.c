@@ -25,6 +25,7 @@ static uint32_t g_phase = 0;
 static uint32_t g_phase_step1 = 0;
 static uint32_t g_phase_step2 = 0;
 static int g_sound_active = 0;
+static int g_sound_enabled = 1;
 
 /*
  * SDL Audio Callback
@@ -117,11 +118,19 @@ void sound_close(void) {
 }
 
 void sound_trigger_pikoon(void) {
-    if (!g_sound_active) return;
+    if (!g_sound_active || !g_sound_enabled) return;
 
     SDL_LockAudio();
     g_tone_state = TONE_PART1;
     g_sample_idx = 0;
     g_phase = 0;
     SDL_UnlockAudio();
+}
+
+void sound_set_enabled(int enabled) {
+    g_sound_enabled = enabled ? 1 : 0;
+}
+
+int sound_is_enabled(void) {
+    return g_sound_enabled;
 }

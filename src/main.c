@@ -33,11 +33,19 @@ static const GameEntry g_games[] = {
 /* UI State */
 typedef enum {
     STATE_BOOT,
-    STATE_MENU
+    STATE_MENU,
+    STATE_SYS_MENU,
+    STATE_SETTINGS
 } AppState;
 
 static AppState g_state = STATE_BOOT;
 static int g_selected_index = 0;
+static int g_sys_menu_index = 0;
+#define SYS_MENU_COUNT 4
+
+static int g_settings_index = 0;
+#define SETTINGS_COUNT 4
+
 static SDL_Surface *g_screen = NULL;
 
 /* Track modifier key states for simultaneous press (START + SELECT) */
@@ -189,10 +197,134 @@ static void draw_menu(SDL_Surface *surface) {
     draw_line_h(surface, 0, 206, SCREEN_WIDTH, col_border);
     draw_fill_rect(surface, 0, 207, SCREEN_WIDTH, 33, col_footer_bg);
 
-    /* Action guides */
-    font_draw_string(surface, 12, 218, "A: LAUNCH", col_white, 1);
-    font_draw_string(surface, 106, 218, "MENU: STOCK UI", col_dim, 1);
+    /* Action guides (clean two-column layout) */
+    font_draw_string(surface, 14, 218, "A: LAUNCH", col_white, 1);
     font_draw_string(surface, 222, 218, "ST+SEL: EXIT", col_dim, 1);
+}
+
+/*
+ * Draw System Menu Modal (Centered dialog on top of main menu)
+ */
+static void draw_sys_menu(SDL_Surface *surface) {
+    /* Base game list drawn underneath */
+    draw_menu(surface);
+
+    /* Modal card dimensions: 230x136 */
+    int card_w = 230;
+    int card_h = 136;
+    int card_x = (SCREEN_WIDTH - card_w) / 2;
+    int card_y = (SCREEN_HEIGHT - card_h) / 2;
+
+    Uint32 col_card_bg   = SDL_MapRGB(surface->format, 16, 16, 20);
+    Uint32 col_card_head = SDL_MapRGB(surface->format, 28, 28, 34);
+    Uint32 col_border    = SDL_MapRGB(surface->format, 255, 85, 0); /* TE Orange border */
+    Uint32 col_div       = SDL_MapRGB(surface->format, 50, 50, 60);
+    Uint32 col_orange    = SDL_MapRGB(surface->format, 255, 85, 0);
+    Uint32 col_white     = SDL_MapRGB(surface->format, 245, 245, 245);
+    Uint32 col_dim       = SDL_MapRGB(surface->format, 130, 130, 140);
+    Uint32 col_black     = SDL_MapRGB(surface->format, 15, 15, 15);
+
+    /* Card background & Orange border */
+    draw_fill_rect(surface, card_x, card_y, card_w, card_h, col_card_bg);
+    draw_rect(surface, card_x, card_y, card_w, card_h, col_border);
+
+    /* Modal header (Height: 24px) */
+    draw_fill_rect(surface, card_x + 1, card_y + 1, card_w - 2, 23, col_card_head);
+    draw_line_h(surface, card_x, card_y + 24, card_w, col_div);
+    font_draw_string(surface, card_x + 10, card_y + 8, "// SYSTEM MENU", col_orange, 1);
+
+    /* Options */
+    static const char *options[SYS_MENU_COUNT] = {
+        "RESUME",
+        "RETURN TO TRIMUI UI",
+        "SETTINGS",
+        "POWER OFF"
+    };
+
+    int item_start_y = card_y + 34;
+    int row_h = 19;
+
+    for (int i = 0; i < SYS_MENU_COUNT; ++i) {
+        int item_y = item_start_y + i * row_h;
+        int is_selected = (i == g_sys_menu_index);
+
+        if (is_selected) {
+            draw_fill_rect(surface, card_x + 6, item_y - 2, card_w - 12, 16, col_orange);
+            font_draw_string(surface, card_x + 12, item_y + 2, ">", col_black, 1);
+            font_draw_string(surface, card_x + 24, item_y + 2, options[i], col_black, 1);
+        } else {
+            font_draw_string(surface, card_x + 24, item_y + 2, options[i], col_white, 1);
+        }
+    }
+
+    /* Modal footer */
+    draw_line_h(surface, card_x, card_y + card_h - 22, card_w, col_div);
+    font_draw_string(surface, card_x + 14, card_y + card_h - 14, "A: SELECT    B/MENU: BACK", col_dim, 1);
+}
+
+/*
+ * Draw Settings Menu Modal (Centered dialog on top of main menu)
+ */
+static void draw_settings_menu(SDL_Surface *surface) {
+    /* Base game list drawn underneath */
+    draw_menu(surface);
+
+    /* Modal card dimensions: 250x146 */
+    int card_w = 250;
+    int card_h = 146;
+    int card_x = (SCREEN_WIDTH - card_w) / 2;
+    int card_y = (SCREEN_HEIGHT - card_h) / 2;
+
+    Uint32 col_card_bg   = SDL_MapRGB(surface->format, 16, 16, 20);
+    Uint32 col_card_head = SDL_MapRGB(surface->format, 28, 28, 34);
+    Uint32 col_border    = SDL_MapRGB(surface->format, 255, 85, 0); /* TE Orange border */
+    Uint32 col_div       = SDL_MapRGB(surface->format, 50, 50, 60);
+    Uint32 col_orange    = SDL_MapRGB(surface->format, 255, 85, 0);
+    Uint32 col_white     = SDL_MapRGB(surface->format, 245, 245, 245);
+    Uint32 col_dim       = SDL_MapRGB(surface->format, 130, 130, 140);
+    Uint32 col_black     = SDL_MapRGB(surface->format, 15, 15, 15);
+
+    /* Card background & Orange border */
+    draw_fill_rect(surface, card_x, card_y, card_w, card_h, col_card_bg);
+    draw_rect(surface, card_x, card_y, card_w, card_h, col_border);
+
+    /* Modal header (Height: 24px) */
+    draw_fill_rect(surface, card_x + 1, card_y + 1, card_w - 2, 23, col_card_head);
+    draw_line_h(surface, card_x, card_y + 24, card_w, col_div);
+    font_draw_string(surface, card_x + 10, card_y + 8, "// SETTINGS", col_orange, 1);
+
+    char sound_opt[32];
+    snprintf(sound_opt, sizeof(sound_opt), "SOUND FX    : [%s]", sound_is_enabled() ? "ENABLED" : "MUTED");
+
+    char ver_opt[32];
+    snprintf(ver_opt, sizeof(ver_opt), "VERSION     : %s", KURUI_VERSION);
+
+    const char *settings_opts[SETTINGS_COUNT] = {
+        sound_opt,
+        "PLATFORM    : TRIMUI S (32MB)",
+        ver_opt,
+        "< BACK TO SYSTEM MENU"
+    };
+
+    int item_start_y = card_y + 34;
+    int row_h = 20;
+
+    for (int i = 0; i < SETTINGS_COUNT; ++i) {
+        int item_y = item_start_y + i * row_h;
+        int is_selected = (i == g_settings_index);
+
+        if (is_selected) {
+            draw_fill_rect(surface, card_x + 6, item_y - 2, card_w - 12, 17, col_orange);
+            font_draw_string(surface, card_x + 10, item_y + 2, ">", col_black, 1);
+            font_draw_string(surface, card_x + 22, item_y + 2, settings_opts[i], col_black, 1);
+        } else {
+            font_draw_string(surface, card_x + 22, item_y + 2, settings_opts[i], col_white, 1);
+        }
+    }
+
+    /* Modal footer */
+    draw_line_h(surface, card_x, card_y + card_h - 22, card_w, col_div);
+    font_draw_string(surface, card_x + 14, card_y + card_h - 14, "A: TOGGLE/OK    B: BACK", col_dim, 1);
 }
 
 int main(int argc, char *argv[]) {
@@ -249,15 +381,72 @@ int main(int argc, char *argv[]) {
                     else if (key == SDLK_LCTRL || key == SDLK_z || (!g_key_select && key == SDLK_RETURN)) {
                         launch_game(g_selected_index);
                     }
-                    /* MENU Button (Exit to Stock MainUI): ESCAPE on TRIMUI and PC */
+                    /* MENU Button (Open System Menu): ESCAPE on TRIMUI and PC */
                     else if (key == SDLK_ESCAPE) {
-                        printf("[KURUI] MENU button pressed. Returning cleanly to stock MainUI...\n");
-                        running = 0;
-                        break;
+                        printf("[KURUI] MENU button pressed. Opening System Menu...\n");
+                        g_state = STATE_SYS_MENU;
+                        g_sys_menu_index = 0;
                     }
-                    /* B Button (Cancel / No-op): LALT on TRIMUI, 'x' on PC - prevents accidental shutdown */
+                    /* B Button (Cancel / No-op) */
                     else if (key == SDLK_LALT || key == SDLK_x) {
-                        printf("[KURUI] B Button pressed (Cancel/No-op).\n");
+                        printf("[KURUI] B Button pressed.\n");
+                    }
+                } else if (g_state == STATE_SYS_MENU) {
+                    /* Up / Down Navigation in System Menu */
+                    if (key == SDLK_UP) {
+                        g_sys_menu_index = (g_sys_menu_index > 0) ? (g_sys_menu_index - 1) : (SYS_MENU_COUNT - 1);
+                    } else if (key == SDLK_DOWN) {
+                        g_sys_menu_index = (g_sys_menu_index < SYS_MENU_COUNT - 1) ? (g_sys_menu_index + 1) : 0;
+                    }
+                    /* A Button (Confirm Selection) */
+                    else if (key == SDLK_LCTRL || key == SDLK_z || (!g_key_select && key == SDLK_RETURN)) {
+                        if (g_sys_menu_index == 0) {
+                            /* RESUME */
+                            g_state = STATE_MENU;
+                        } else if (g_sys_menu_index == 1) {
+                            /* RETURN TO TRIMUI UI */
+                            printf("[KURUI] Returning cleanly to stock MainUI...\n");
+                            running = 0;
+                            break;
+                        } else if (g_sys_menu_index == 2) {
+                            /* SETTINGS */
+                            g_state = STATE_SETTINGS;
+                            g_settings_index = 0;
+                        } else if (g_sys_menu_index == 3) {
+                            /* POWER OFF */
+                            printf("[KURUI] Power off requested from System Menu...\n");
+                            shutdown_subsystems();
+                            system("poweroff");
+                            exit(0);
+                        }
+                    }
+                    /* B Button or MENU Button (Cancel / Return to Game List) */
+                    else if (key == SDLK_ESCAPE || key == SDLK_LALT || key == SDLK_x) {
+                        g_state = STATE_MENU;
+                    }
+                } else if (g_state == STATE_SETTINGS) {
+                    /* Up / Down Navigation in Settings */
+                    if (key == SDLK_UP) {
+                        g_settings_index = (g_settings_index > 0) ? (g_settings_index - 1) : (SETTINGS_COUNT - 1);
+                    } else if (key == SDLK_DOWN) {
+                        g_settings_index = (g_settings_index < SETTINGS_COUNT - 1) ? (g_settings_index + 1) : 0;
+                    }
+                    /* A Button */
+                    else if (key == SDLK_LCTRL || key == SDLK_z || (!g_key_select && key == SDLK_RETURN)) {
+                        if (g_settings_index == 0) {
+                            /* Toggle sound */
+                            sound_set_enabled(!sound_is_enabled());
+                            if (sound_is_enabled()) {
+                                sound_trigger_pikoon();
+                            }
+                        } else if (g_settings_index == 3) {
+                            /* BACK */
+                            g_state = STATE_SYS_MENU;
+                        }
+                    }
+                    /* B Button or MENU Button (Return to System Menu) */
+                    else if (key == SDLK_ESCAPE || key == SDLK_LALT || key == SDLK_x) {
+                        g_state = STATE_SYS_MENU;
                     }
                 } else if (g_state == STATE_BOOT) {
                     /* Any key press skips boot animation directly to menu */
@@ -282,6 +471,10 @@ int main(int argc, char *argv[]) {
             boot_draw(g_screen);
         } else if (g_state == STATE_MENU) {
             draw_menu(g_screen);
+        } else if (g_state == STATE_SYS_MENU) {
+            draw_sys_menu(g_screen);
+        } else if (g_state == STATE_SETTINGS) {
+            draw_settings_menu(g_screen);
         }
 
         /* Buffer Flip */
