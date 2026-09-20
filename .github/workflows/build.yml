@@ -82,8 +82,8 @@ jobs:
 
       - name: Package Release
         run: |
-          mkdir -p release/apps/kurui
-          cp kurui release/apps/kurui/
+          mkdir -p release/Apps/kurui
+          cp kurui release/Apps/kurui/
           cp scripts/trimui_init.sh release/
           cp scripts/update.sh release/
           cp scripts/updater release/
@@ -91,23 +91,27 @@ jobs:
           cat << EOF > release/README.txt
           KURUI ${{ steps.versioning.outputs.tag }} - Custom Minimal Launcher for TRIMUI Model S (Powkiddy A66)
 
-          [Installation Method 1: Automatic Update (Recommended)]
-          1. Copy 'updater', 'trimui_init.sh', and 'apps/' to the root of your MicroSD card.
-          2. Insert MicroSD card into TRIMUI Model S and power on.
-          3. Installation completes automatically and reboots into KURUI.
+          [Installation Method 1: Instant Launch via TRIMUI FILE Menu (Recommended)]
+          1. Copy 'TrimuiUpdate_KURUI.zip' anywhere onto your MicroSD card.
+          2. On TRIMUI, navigate to the FILE menu and execute 'TrimuiUpdate_KURUI.zip'.
+          3. KURUI will launch instantly!
 
           [Installation Method 2: Manual]
-          1. Place 'apps/kurui/kurui' into /mnt/SDCARD/apps/kurui/kurui
+          1. Place 'Apps/kurui/kurui' into /mnt/SDCARD/Apps/kurui/kurui
           2. Place 'trimui_init.sh' directly into /mnt/SDCARD/trimui_init.sh
           EOF
 
           cd release && zip -r ../trimui_kurui.zip *
+          cp ../trimui_kurui.zip ../TrimuiUpdate_KURUI.zip
+          cd ..
 
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: trimui_kurui-${{ steps.versioning.outputs.tag }}
-          path: trimui_kurui.zip
+          path: |
+            trimui_kurui.zip
+            TrimuiUpdate_KURUI.zip
           retention-days: 30
 
       - name: Create Git Tag and GitHub Release
@@ -121,5 +125,7 @@ jobs:
             TRIMUI Model S (Powkiddy A66) 向けカスタムランチャー自動ビルドリリース
 
             - **ターゲット**: Allwinner F1C100s (ARMv5TE)
-            - **ダウンロード**: 下記の `trimui_kurui.zip` をダウンロードし、MicroSDカードに展開してください。
-          files: trimui_kurui.zip
+            - **起動方法**: `TrimuiUpdate_KURUI.zip` をSDカードに入れて、TRIMUI の「FILE」メニューからポチッと実行するだけで即時起動します！
+          files: |
+            trimui_kurui.zip
+            TrimuiUpdate_KURUI.zip
