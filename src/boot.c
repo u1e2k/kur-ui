@@ -8,7 +8,7 @@
 
 #define TARGET_Y 96
 #define LOGO_SCALE 3
-#define REST_FRAMES 42 /* ~0.7 seconds at 60 FPS */
+#define REST_FRAMES 60 /* ~1.0 second hold after landing at 60 FPS */
 
 static int g_logo_y = -32;
 static int g_landed = 0;
@@ -26,7 +26,8 @@ int boot_update(void) {
     if (g_finished) return 1;
 
     if (!g_landed) {
-        g_logo_y += 3;
+        /* Smooth, elegant Game Boy descent tempo (~2.1 seconds) */
+        g_logo_y += 1;
         if (g_logo_y >= TARGET_Y) {
             g_logo_y = TARGET_Y;
             g_landed = 1;
