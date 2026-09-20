@@ -25,6 +25,7 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends \
             gcc-arm-linux-gnueabi \
+            libc6-dev-armel-cross \
             make \
             zip \
             git \
@@ -59,27 +60,27 @@ jobs:
       - name: Build lightweight SDL stub for ARM linker
         run: |
           mkdir -p /tmp/sdl_arm
+          # Header-independent C symbols for ARM dynamic linker
           cat << 'EOF' > /tmp/stub_sdl.c
-          #include <SDL/SDL.h>
-          int SDL_Init(Uint32 f) { (void)f; return 0; }
+          int SDL_Init(int f) { (void)f; return 0; }
           void SDL_Quit(void) {}
-          SDL_Surface *SDL_SetVideoMode(int w, int h, int b, Uint32 f) { (void)w;(void)h;(void)b;(void)f; return 0; }
+          void *SDL_SetVideoMode(int w, int h, int b, int f) { (void)w;(void)h;(void)b;(void)f; return 0; }
           void SDL_WM_SetCaption(const char *t, const char *i) { (void)t;(void)i; }
           int SDL_ShowCursor(int t) { (void)t; return 0; }
-          Uint32 SDL_GetTicks(void) { return 0; }
-          void SDL_Delay(Uint32 ms) { (void)ms; }
-          int SDL_PollEvent(SDL_Event *e) { (void)e; return 0; }
-          int SDL_Flip(SDL_Surface *s) { (void)s; return 0; }
-          int SDL_FillRect(SDL_Surface *d, SDL_Rect *r, Uint32 c) { (void)d;(void)r;(void)c; return 0; }
-          Uint32 SDL_MapRGB(const SDL_PixelFormat *const f, const Uint8 r, const Uint8 g, const Uint8 b) { (void)f;(void)r;(void)g;(void)b; return 0; }
-          int SDL_OpenAudio(SDL_AudioSpec *d, SDL_AudioSpec *o) { (void)d;(void)o; return 0; }
+          unsigned int SDL_GetTicks(void) { return 0; }
+          void SDL_Delay(unsigned int ms) { (void)ms; }
+          int SDL_PollEvent(void *e) { (void)e; return 0; }
+          int SDL_Flip(void *s) { (void)s; return 0; }
+          int SDL_FillRect(void *d, void *r, unsigned int c) { (void)d;(void)r;(void)c; return 0; }
+          unsigned int SDL_MapRGB(const void *f, unsigned char r, unsigned char g, unsigned char b) { (void)f;(void)r;(void)g;(void)b; return 0; }
+          int SDL_OpenAudio(void *d, void *o) { (void)d;(void)o; return 0; }
           void SDL_CloseAudio(void) {}
           void SDL_PauseAudio(int p) { (void)p; }
           void SDL_LockAudio(void) {}
           void SDL_UnlockAudio(void) {}
           char *SDL_GetError(void) { return ""; }
           EOF
-          arm-linux-gnueabi-gcc -shared -fPIC -Wl,-soname,libSDL-1.2.so.0 -o /tmp/sdl_arm/libSDL-1.2.so.0 /tmp/stub_sdl.c
+          arm-linux-gnueabi-gcc -shared -fPIC -nostdlib -Wl,-soname,libSDL-1.2.so.0 -o /tmp/sdl_arm/libSDL-1.2.so.0 /tmp/stub_sdl.c
           ln -s /tmp/sdl_arm/libSDL-1.2.so.0 /tmp/sdl_arm/libSDL.so
 
       - name: Build KURUI for TRIMUI Model S
