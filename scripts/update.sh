@@ -3,7 +3,7 @@
 # Integrates with TrimUI onboard 'notify' UI for native progress display
 
 SD_ROOT="/mnt/SDCARD"
-INSTALL_DIR="$SD_ROOT/apps/kurui"
+INSTALL_DIR="$SD_ROOT/Apps/kurui"
 UPDATE_DIR="$(dirname "$0")"
 
 do_notify() {
@@ -16,78 +16,41 @@ do_notify() {
     fi
 }
 
-do_notify 10 "Checking package..."
+do_notify 10 "Preparing installation..."
+mkdir -p "$INSTALL_DIR"
 
+do_notify 30 "Copying KURUI binary..."
 SOURCE_BIN=""
 if [ -f "$UPDATE_DIR/kurui" ]; then
     SOURCE_BIN="$UPDATE_DIR/kurui"
+elif [ -f "$UPDATE_DIR/Apps/kurui/kurui" ]; then
+    SOURCE_BIN="$UPDATE_DIR/Apps/kurui/kurui"
 elif [ -f "$UPDATE_DIR/apps/kurui/kurui" ]; then
     SOURCE_BIN="$UPDATE_DIR/apps/kurui/kurui"
-elif [ -f "$SD_ROOT/apps/kurui/kurui" ]; then
-    SOURCE_BIN="$SD_ROOT/apps/kurui/kurui"
 fi
 
-if [ -z "$SOURCE_BIN" ] || [ ! -s "$SOURCE_BIN" ]; then
-    if command -v notify >/dev/null 2>&1; then
-        notify 0 package verification fail
-        sleep 2
-        notify 0 quit
-    fi
-    rm -f "$0" "$SD_ROOT/updater" "$SD_ROOT/update.sh"
-    sync
-    exit 1
+if [ -n "$SOURCE_BIN" ] && [ -s "$SOURCE_BIN" ]; then
+    cp "$SOURCE_BIN" "$INSTALL_DIR/kurui"
+    chmod +x "$INSTALL_DIR/kurui"
 fi
 
-do_notify 30 "Preparing directory..."
-mkdir -p "$INSTALL_DIR"
-
-do_notify 50 "Installing kurui binary..."
-cp "$SOURCE_BIN" "$INSTALL_DIR/kurui"
-chmod +x "$INSTALL_DIR/kurui"
-
-if [ -f "$SD_ROOT/trimui_init.sh" ]; then
-    cp "$SD_ROOT/trimui_init.sh" "$SD_ROOT/trimui_init.sh.bak"
-fi
-
-do_notify 70 "Setting up boot hook..."
-SOURCE_HOOK=""
+do_notify 60 "Setting up boot hook..."
 if [ -f "$UPDATE_DIR/trimui_init.sh" ]; then
-    SOURCE_HOOK="$UPDATE_DIR/trimui_init.sh"
-elif [ -f "$UPDATE_DIR/scripts/trimui_init.sh" ]; then
-    SOURCE_HOOK="$UPDATE_DIR/scripts/trimui_init.sh"
-fi
-
-if [ -n "$SOURCE_HOOK" ] && [ -f "$SOURCE_HOOK" ]; then
-    cp "$SOURCE_HOOK" "$SD_ROOT/trimui_init.sh"
-    chmod +x "$SD_ROOT/trimui_init.sh"
-else
-    cat << 'EOF' > "$SD_ROOT/trimui_init.sh"
-#!/bin/sh
-APP_DIR="/mnt/SDCARD/apps/kurui"
-if [ -d "$APP_DIR" ] && [ -f "$APP_DIR/kurui" ]; then
-    cd "$APP_DIR"
-    chmod +x ./kurui
-    exec ./kurui
-fi
-if [ -f "/usr/trimui/bin/MainUI" ]; then
-    exec /usr/trimui/bin/MainUI
-fi
-EOF
+    cp "$UPDATE_DIR/trimui_init.sh" "$SD_ROOT/trimui_init.sh"
     chmod +x "$SD_ROOT/trimui_init.sh"
 fi
 
-do_notify 90 "Cleaning up updater..."
+do_notify 80 "Cleaning up temporary files..."
 rm -f "$0" "$SD_ROOT/updater" "$SD_ROOT/update.sh"
-
-sync
-sleep 1
 sync
 
 do_notify 100 "Install complete! Rebooting..."
-sleep 2
+sleep 1
 
 if command -v notify >/dev/null 2>&1; then
     notify 100 quit
 fi
 
+sleep 1
+sync
 reboot

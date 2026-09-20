@@ -1,19 +1,25 @@
 #!/bin/sh
-# TRIMUI Model S / Powkiddy A66 Official Updater & Instant Launcher
-# Triggered automatically when selected via TRIMUI "FILE" menu
-
-# 1. Kill stock update UI to take over the display framebuffer
-killall updateui
-killall keymon
+# TRIMUI Model S / Powkiddy A66 Safe Installer Script
+# Integrates with TrimUI onboard 'notify' UI for native progress display
 
 SD_ROOT="/mnt/SDCARD"
 INSTALL_DIR="$SD_ROOT/Apps/kurui"
 UPDATE_DIR="$(dirname "$0")"
 
-# 2. Prepare target directory (Case-sensitive Apps)
+do_notify() {
+    pct="$1"
+    txt="$2"
+    if command -v notify >/dev/null 2>&1; then
+        notify "$pct" update "$txt"
+    else
+        echo "[$pct%] $txt"
+    fi
+}
+
+do_notify 10 "Preparing installation..."
 mkdir -p "$INSTALL_DIR"
 
-# 3. Copy launcher binary
+do_notify 30 "Copying KURUI binary..."
 SOURCE_BIN=""
 if [ -f "$UPDATE_DIR/kurui" ]; then
     SOURCE_BIN="$UPDATE_DIR/kurui"
@@ -28,25 +34,23 @@ if [ -n "$SOURCE_BIN" ] && [ -s "$SOURCE_BIN" ]; then
     chmod +x "$INSTALL_DIR/kurui"
 fi
 
-# 4. Install startup boot hook for subsequent power-ons
+do_notify 60 "Setting up boot hook..."
 if [ -f "$UPDATE_DIR/trimui_init.sh" ]; then
     cp "$UPDATE_DIR/trimui_init.sh" "$SD_ROOT/trimui_init.sh"
     chmod +x "$SD_ROOT/trimui_init.sh"
 fi
 
-# 5. Clean up installer zip triggers
+do_notify 80 "Cleaning up temporary files..."
 rm -f "$0" "$SD_ROOT/updater" "$SD_ROOT/update.sh"
 sync
 
-# 6. Execute KURUI instantly on the display!
-export LD_LIBRARY_PATH="$INSTALL_DIR:$SD_ROOT/lib:/usr/lib:/usr/trimui/lib:$LD_LIBRARY_PATH"
-cd "$INSTALL_DIR"
+do_notify 100 "Install complete! Rebooting..."
+sleep 1
 
-if [ -f "./kurui" ]; then
-    ./kurui > "$SD_ROOT/kurui.log" 2>&1
+if command -v notify >/dev/null 2>&1; then
+    notify 100 quit
 fi
 
-# Fallback to MainUI if kurui exits
-if [ -f "/usr/trimui/bin/MainUI" ]; then
-    exec /usr/trimui/bin/MainUI
-fi
+sleep 1
+sync
+reboot
