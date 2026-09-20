@@ -1,0 +1,20 @@
+# Build outputs
+build/
+*.o
+*.obj
+kurui
+kurui.exe
+*.elf
+
+# Distribution / Artifacts
+dist/
+trimui_kurui.zip
+*.zip
+
+# OS / Editor specific
+.DS_Store
+Thumbs.db
+*.swp
+*~
+.vscode/
+.idea/
