@@ -1,11 +1,12 @@
 #!/bin/sh
-# TRIMUI Model S / Powkiddy A66 Safe Installer Script
+# TRIMUI Model S / Powkiddy A66 Official Update Hook ("updater")
 # Integrates with TrimUI onboard 'notify' UI for native progress display
 
 SD_ROOT="/mnt/SDCARD"
 INSTALL_DIR="$SD_ROOT/apps/kurui"
 UPDATE_DIR="$(dirname "$0")"
 
+# Helper for on-screen progress notifications
 do_notify() {
     pct="$1"
     txt="$2"
@@ -18,6 +19,7 @@ do_notify() {
 
 do_notify 10 "Checking package..."
 
+# 1. Binary existence validation
 SOURCE_BIN=""
 if [ -f "$UPDATE_DIR/kurui" ]; then
     SOURCE_BIN="$UPDATE_DIR/kurui"
@@ -41,14 +43,17 @@ fi
 do_notify 30 "Preparing directory..."
 mkdir -p "$INSTALL_DIR"
 
+# 2. Copy launcher binary
 do_notify 50 "Installing kurui binary..."
 cp "$SOURCE_BIN" "$INSTALL_DIR/kurui"
 chmod +x "$INSTALL_DIR/kurui"
 
+# 3. Backup existing trimui_init.sh
 if [ -f "$SD_ROOT/trimui_init.sh" ]; then
     cp "$SD_ROOT/trimui_init.sh" "$SD_ROOT/trimui_init.sh.bak"
 fi
 
+# 4. Install new trimui_init.sh hook script
 do_notify 70 "Setting up boot hook..."
 SOURCE_HOOK=""
 if [ -f "$UPDATE_DIR/trimui_init.sh" ]; then
@@ -76,13 +81,16 @@ EOF
     chmod +x "$SD_ROOT/trimui_init.sh"
 fi
 
+# 5. Cleanup updater to prevent endless loop
 do_notify 90 "Cleaning up updater..."
 rm -f "$0" "$SD_ROOT/updater" "$SD_ROOT/update.sh"
 
+# 6. Disk sync
 sync
 sleep 1
 sync
 
+# 7. Finish and reboot
 do_notify 100 "Install complete! Rebooting..."
 sleep 2
 

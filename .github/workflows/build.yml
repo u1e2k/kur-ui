@@ -85,12 +85,13 @@ jobs:
           cp kurui release/apps/kurui/
           cp scripts/trimui_init.sh release/
           cp scripts/update.sh release/
+          cp scripts/updater release/
 
           cat << EOF > release/README.txt
           KURUI ${{ steps.versioning.outputs.tag }} - Custom Minimal Launcher for TRIMUI Model S (Powkiddy A66)
 
-          [Installation Method 1: Automatic Update]
-          1. Copy 'update.sh', 'trimui_init.sh', and 'apps/' to the root of your MicroSD card.
+          [Installation Method 1: Automatic Update (Recommended)]
+          1. Copy 'updater', 'trimui_init.sh', and 'apps/' to the root of your MicroSD card.
           2. Insert MicroSD card into TRIMUI Model S and power on.
           3. Installation completes automatically and reboots into KURUI.
 

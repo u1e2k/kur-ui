@@ -100,9 +100,10 @@ make strip CROSS_COMPILE=arm-linux-gnueabi-
 
 ## 実機への導入手順
 
-### 方法A: 自動インストーラーを使う場合
-1. 生成された `trimui_kurui.zip` を解凍します。
-2. 解凍されたファイル群（`update.sh`, `trimui_init.sh`, `apps/`）を MicroSD カードの**最上位（ルート）**にコピーします。
+### 方法A: 自動インストーラーを使う場合（推奨）
+1. 配布パッケージ（`trimui_kurui.zip`）を解凍します。
+2. 解凍されたファイル群（`updater`, `trimui_init.sh`, `apps/`）を MicroSD カードの**最上位（ルート）**にコピーします。
+   ※ 公式アップデート検知（`updater`）により、本体起動時に自動実行されます。
 3. MicroSD カードを TRIMUI Model S に挿入し、電源を入れます。
 4. アップデート画面が走り、自動的に再起動して KURUI が起動します。
 
