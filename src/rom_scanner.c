@@ -11,21 +11,22 @@
 typedef struct {
     const char *folder;
     const char *tag;
-    const char *emu_script;
-    const char *emu_stock;
+    const char *emu_standalone; /* Preferred standalone community emulator (supports full in-game SRAM saves) */
+    const char *emu_script;     /* GMenuNX stock script fallback */
+    const char *emu_stock;      /* Stock firmware binary fallback */
 } FolderMapping;
 
 static const FolderMapping g_mappings[] = {
-    {"GB",      "[GB]",  "/mnt/SDCARD/Apps/gmenunx/stockemulators/gamebatte.sh", "/usr/trimui/bin/gamebatte"},
-    {"GBA",     "[GBA]", "/mnt/SDCARD/Apps/gmenunx/stockemulators/gpsp.sh",      "/usr/trimui/bin/gpsp"},
-    {"FC",      "[FC]",  "/mnt/SDCARD/Apps/gmenunx/stockemulators/fceux.sh",     "/usr/trimui/bin/fceux"},
-    {"SFC",     "[SFC]", "/mnt/SDCARD/Apps/gmenunx/stockemulators/snes9x4d.sh",  "/usr/trimui/bin/snes9x4d"},
-    {"MD",      "[MD]",  "/mnt/SDCARD/Apps/gmenunx/stockemulators/PicoDrive.sh", "/usr/trimui/bin/PicoDrive"},
-    {"PCE",     "[PCE]", "/mnt/SDCARD/Apps/gmenunx/stockemulators/temper.sh",    "/usr/trimui/bin/temper"},
-    {"PS",      "[PS]",  "/mnt/SDCARD/Apps/gmenunx/stockemulators/pcsx.sh",      "/usr/trimui/bin/pcsx"},
-    {"NGP",     "[NGP]", "/mnt/SDCARD/Apps/gmenunx/stockemulators/gngeo.sh",     "/usr/trimui/bin/gngeo"},
-    {"ARCADE",  "[ARC]", "/mnt/SDCARD/Apps/gmenunx/stockemulators/mame4allx.sh", "/usr/trimui/bin/mame4allx"},
-    {"NEOGEO",  "[NEO]", "/mnt/SDCARD/Apps/gmenunx/stockemulators/gngeo.sh",     "/usr/trimui/bin/gngeo"}
+    {"GB",      "[GB]",  "/mnt/SDCARD/Apps/gambatte/gambatte-dms",   "/mnt/SDCARD/Apps/gmenunx/stockemulators/gamebatte.sh", "/usr/trimui/bin/gamebatte"},
+    {"GBA",     "[GBA]", "/mnt/SDCARD/Apps/gpsp/gpsp",               "/mnt/SDCARD/Apps/gmenunx/stockemulators/gpsp.sh",      "/usr/trimui/bin/gpsp"},
+    {"FC",      "[FC]",  "/mnt/SDCARD/Apps/fceux/fceux.dge",         "/mnt/SDCARD/Apps/gmenunx/stockemulators/fceux.sh",     "/usr/trimui/bin/fceux"},
+    {"SFC",     "[SFC]", "/mnt/SDCARD/Apps/snes9x2002/snes9x2002",   "/mnt/SDCARD/Apps/gmenunx/stockemulators/snes9x4d.sh",  "/usr/trimui/bin/snes9x4d"},
+    {"MD",      "[MD]",  "/mnt/SDCARD/Apps/picodrive/PicoDrive",     "/mnt/SDCARD/Apps/gmenunx/stockemulators/PicoDrive.sh", "/usr/trimui/bin/PicoDrive"},
+    {"PCE",     "[PCE]", "/mnt/SDCARD/Apps/temper/temper",           "/mnt/SDCARD/Apps/gmenunx/stockemulators/temper.sh",    "/usr/trimui/bin/temper"},
+    {"PS",      "[PS]",  "/mnt/SDCARD/Apps/pcsx/pcsx",               "/mnt/SDCARD/Apps/gmenunx/stockemulators/pcsx.sh",      "/usr/trimui/bin/pcsx"},
+    {"NGP",     "[NGP]", "/mnt/SDCARD/Apps/race-od/race-od",         "/mnt/SDCARD/Apps/gmenunx/stockemulators/gngeo.sh",     "/usr/trimui/bin/gngeo"},
+    {"ARCADE",  "[ARC]", "/mnt/SDCARD/Apps/mame4all/mame4all",       "/mnt/SDCARD/Apps/gmenunx/stockemulators/mame4allx.sh", "/usr/trimui/bin/mame4allx"},
+    {"NEOGEO",  "[NEO]", "/mnt/SDCARD/Apps/gngeo/gngeo",             "/mnt/SDCARD/Apps/gmenunx/stockemulators/gngeo.sh",     "/usr/trimui/bin/gngeo"}
 };
 #define MAPPING_COUNT (sizeof(g_mappings) / sizeof(g_mappings[0]))
 
@@ -128,8 +129,10 @@ int rom_scanner_scan(const char *roms_dir, ScannedGame *out_games, int max_games
             char rom_full_path[512];
             snprintf(rom_full_path, sizeof(rom_full_path), "%s/%s", subfolder_path, entry->d_name);
 
-            /* Check whether custom emulator script or stock executable is available */
-            if (access(g_mappings[m].emu_script, F_OK) == 0) {
+            /* Prioritize standalone community emulators for proper SRAM in-game saves */
+            if (access(g_mappings[m].emu_standalone, F_OK) == 0) {
+                snprintf(g->cmd, sizeof(g->cmd), "%s \"%s\"", g_mappings[m].emu_standalone, rom_full_path);
+            } else if (access(g_mappings[m].emu_script, F_OK) == 0) {
                 snprintf(g->cmd, sizeof(g->cmd), "%s \"%s\"", g_mappings[m].emu_script, rom_full_path);
             } else {
                 snprintf(g->cmd, sizeof(g->cmd), "%s \"%s\"", g_mappings[m].emu_stock, rom_full_path);
@@ -151,12 +154,12 @@ void rom_scanner_load_defaults(ScannedGame *out_games, int *out_count) {
         const char *title;
         const char *cmd;
     } defaults[] = {
-        {"[GB]",   "TETRIS",                 "/mnt/SDCARD/Apps/gmenunx/stockemulators/gamebatte.sh \"/mnt/SDCARD/Roms/GB/tetris.gb\""},
-        {"[FC]",   "SUPER MARIO BROS.",      "/mnt/SDCARD/Apps/gmenunx/stockemulators/fceux.sh \"/mnt/SDCARD/Roms/FC/mario.nes\""},
-        {"[GBA]",  "THE LEGEND OF ZELDA",    "/mnt/SDCARD/Apps/gmenunx/stockemulators/gpsp.sh \"/mnt/SDCARD/Roms/GBA/zelda.gba\""},
-        {"[GB]",   "POKEMON RED",            "/mnt/SDCARD/Apps/gmenunx/stockemulators/gamebatte.sh \"/mnt/SDCARD/Roms/GB/pokemon.gb\""},
-        {"[NGPC]", "METAL SLUG 1ST MISSION", "/mnt/SDCARD/Apps/gmenunx/stockemulators/gngeo.sh \"/mnt/SDCARD/Roms/NGP/mslug.ngc\""},
-        {"[FC]",   "GHOSTS 'N GOBLINS",      "/mnt/SDCARD/Apps/gmenunx/stockemulators/fceux.sh \"/mnt/SDCARD/Roms/FC/makaimura.nes\""}
+        {"[GB]",   "TETRIS",                 "/mnt/SDCARD/Apps/gambatte/gambatte-dms \"/mnt/SDCARD/Roms/GB/tetris.gb\""},
+        {"[FC]",   "SUPER MARIO BROS.",      "/mnt/SDCARD/Apps/fceux/fceux.dge \"/mnt/SDCARD/Roms/FC/mario.nes\""},
+        {"[GBA]",  "THE LEGEND OF ZELDA",    "/mnt/SDCARD/Apps/gpsp/gpsp \"/mnt/SDCARD/Roms/GBA/zelda.gba\""},
+        {"[GB]",   "POKEMON RED",            "/mnt/SDCARD/Apps/gambatte/gambatte-dms \"/mnt/SDCARD/Roms/GB/pokemon.gb\""},
+        {"[NGPC]", "METAL SLUG 1ST MISSION", "/mnt/SDCARD/Apps/race-od/race-od \"/mnt/SDCARD/Roms/NGP/mslug.ngc\""},
+        {"[FC]",   "GHOSTS 'N GOBLINS",      "/mnt/SDCARD/Apps/fceux/fceux.dge \"/mnt/SDCARD/Roms/FC/makaimura.nes\""}
     };
     int count = sizeof(defaults) / sizeof(defaults[0]);
 
