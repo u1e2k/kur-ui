@@ -20,6 +20,9 @@ jobs:
     steps:
       - name: Install dependencies and cross toolchain
         run: |
+          # Eliminate version mismatches from security/updates by pinning to pure bookworm main
+          rm -f /etc/apt/sources.list.d/*
+          echo "deb http://deb.debian.org/debian bookworm main" > /etc/apt/sources.list
           dpkg --add-architecture armel
           apt-get update
           apt-get install -y --no-install-recommends \
