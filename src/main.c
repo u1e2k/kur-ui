@@ -138,25 +138,26 @@ static void draw_menu(SDL_Surface *surface) {
     Uint32 col_dim       = SDL_MapRGB(surface->format, 120, 120, 130);    /* Dim text */
     Uint32 col_black     = SDL_MapRGB(surface->format, 15, 15, 15);       /* Inverted text */
 
-    /* 1. Background */
-    draw_fill_rect(surface, 0, 0, SCREEN_WIDTH, SCREEN_HEIGHT, col_bg);
+    /* 1. Full Surface Clear */
+    SDL_FillRect(surface, NULL, col_bg);
 
-    /* 2. Header (Height: 24px) */
-    draw_fill_rect(surface, 0, 0, SCREEN_WIDTH, 24, col_header_bg);
-    draw_line_h(surface, 0, 24, SCREEN_WIDTH, col_border);
+    /* 2. Header (Height: 26px) */
+    draw_fill_rect(surface, 0, 0, SCREEN_WIDTH, 26, col_header_bg);
+    draw_line_h(surface, 0, 26, SCREEN_WIDTH, col_border);
 
-    /* Header text */
-    font_draw_string(surface, 8, 8, "KURUI", col_orange, 1);
-    font_draw_string(surface, 52, 8, "// SELECT", col_white, 1);
+    /* Header text (Bold KURUI in scale 2) */
+    font_draw_string(surface, 8, 5, "KURUI", col_orange, 2);
+    font_draw_string(surface, 96, 9, "// SELECT", col_white, 1);
 
     /* Battery & Clock right aligned */
     const char *status_info = "[85%] 12:00";
     int status_w = font_get_string_width(status_info, 1);
-    font_draw_string(surface, SCREEN_WIDTH - status_w - 8, 8, status_info, col_dim, 1);
+    font_draw_string(surface, SCREEN_WIDTH - status_w - 8, 9, status_info, col_dim, 1);
 
-    /* 3. Main List (Height: 184px, Y: 25 to 208) */
-    int list_start_y = 30;
-    int row_height = 28;
+    /* 3. Main List (Height: 180px, Y: 27 to 207) */
+    /* Scale 2 (16x16px per character) for crisp, punchy legibility on the 2.0" LCD */
+    int list_start_y = 28;
+    int row_height = 29;
 
     for (int i = 0; i < (int)GAME_COUNT; ++i) {
         int item_y = list_start_y + i * row_height;
@@ -164,20 +165,20 @@ static void draw_menu(SDL_Surface *surface) {
 
         if (is_selected) {
             /* Highlight bar */
-            draw_fill_rect(surface, 6, item_y - 2, SCREEN_WIDTH - 12, 22, col_orange);
+            draw_fill_rect(surface, 4, item_y - 2, SCREEN_WIDTH - 8, 25, col_orange);
 
             /* Arrow indicator */
-            font_draw_string(surface, 12, item_y + 4, ">", col_black, 1);
+            font_draw_string(surface, 8, item_y + 2, ">", col_black, 2);
 
-            /* Tag & Title in inverted dark text */
-            font_draw_string(surface, 26, item_y + 4, g_games[i].tag, col_black, 1);
-            int tag_w = font_get_string_width(g_games[i].tag, 1);
-            font_draw_string(surface, 32 + tag_w, item_y + 4, g_games[i].title, col_black, 1);
+            /* Tag & Title in inverted dark text (Scale 2 = 16x16px) */
+            font_draw_string(surface, 26, item_y + 2, g_games[i].tag, col_black, 2);
+            int tag_w = font_get_string_width(g_games[i].tag, 2);
+            font_draw_string(surface, 30 + tag_w, item_y + 2, g_games[i].title, col_black, 2);
         } else {
-            /* Normal item */
-            font_draw_string(surface, 26, item_y + 4, g_games[i].tag, col_tag, 1);
-            int tag_w = font_get_string_width(g_games[i].tag, 1);
-            font_draw_string(surface, 32 + tag_w, item_y + 4, g_games[i].title, col_white, 1);
+            /* Normal item (Scale 2 = 16x16px) */
+            font_draw_string(surface, 26, item_y + 2, g_games[i].tag, col_tag, 2);
+            int tag_w = font_get_string_width(g_games[i].tag, 2);
+            font_draw_string(surface, 30 + tag_w, item_y + 2, g_games[i].title, col_white, 2);
         }
     }
 
@@ -186,9 +187,9 @@ static void draw_menu(SDL_Surface *surface) {
     draw_fill_rect(surface, 0, 209, SCREEN_WIDTH, 31, col_footer_bg);
 
     /* Action guides */
-    font_draw_string(surface, 10, 218, "A: 起動", col_white, 1);
-    font_draw_string(surface, 90, 218, "MENU: 純正UI", col_dim, 1);
-    font_draw_string(surface, 210, 218, "ST+SEL: 終了", col_dim, 1);
+    font_draw_string(surface, 12, 218, "A: 起動", col_white, 1);
+    font_draw_string(surface, 96, 218, "MENU: 純正UI", col_dim, 1);
+    font_draw_string(surface, 212, 218, "ST+SEL: 終了", col_dim, 1);
 }
 
 int main(int argc, char *argv[]) {
