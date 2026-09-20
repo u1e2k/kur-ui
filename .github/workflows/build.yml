@@ -13,21 +13,32 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # Use Debian Bullseye (GLIBC 2.31) to maintain binary compatibility with TrimUI stock GLIBC 2.4
+    container:
+      image: debian:bullseye-slim
 
     steps:
-      - name: Install ARM Cross-compiler and SDL headers
+      - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y gcc-arm-linux-gnueabi libsdl1.2-dev zip
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            gcc-arm-linux-gnueabi \
+            libc6-dev-armel-cross \
+            make \
+            zip \
+            git \
+            ca-certificates \
+            libsdl1.2-dev
 
       - name: Checkout code
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Calculate next version tag
+      - name: Configure git and calculate next version
         id: versioning
         run: |
+          git config --global --add safe.directory "*"
           BASE_VERSION=$(tr -d ' \r\n' < VERSION)
           echo "Base Version prefix: ${BASE_VERSION}"
 
@@ -46,7 +57,6 @@ jobs:
 
       - name: Build lightweight SDL stub for ARM linker
         run: |
-          # Create an interface stub for ARM linker (resolves SDL symbols at link time, binds to real /usr/lib/libSDL.so on device)
           mkdir -p /tmp/sdl_arm
           cat << 'EOF' > /tmp/stub_sdl.c
           #include <SDL/SDL.h>
@@ -92,17 +102,17 @@ jobs:
           KURUI ${{ steps.versioning.outputs.tag }} - Custom Minimal Launcher for TRIMUI Model S (Powkiddy A66)
 
           [Installation Method 1: Instant Launch via TRIMUI FILE Menu (Recommended)]
-          1. Copy 'TrimuiUpdate_KURUI.zip' anywhere onto your MicroSD card.
-          2. On TRIMUI, navigate to the FILE menu and execute 'TrimuiUpdate_KURUI.zip'.
-          3. KURUI will launch instantly!
+          1. Copy 'trimui_kurui.zip' (for FW 0.106+) or 'TrimuiUpdate_kurui.zip' (for FW <= 0.105) onto your MicroSD card.
+          2. On TRIMUI, open the FILE menu and execute the zip file.
+          3. KURUI will launch instantly on your screen!
 
-          [Installation Method 2: Manual]
+          [Installation Method 2: Manual Setup]
           1. Place 'Apps/kurui/kurui' into /mnt/SDCARD/Apps/kurui/kurui
           2. Place 'trimui_init.sh' directly into /mnt/SDCARD/trimui_init.sh
           EOF
 
           cd release && zip -r ../trimui_kurui.zip *
-          cp ../trimui_kurui.zip ../TrimuiUpdate_KURUI.zip
+          cp ../trimui_kurui.zip ../TrimuiUpdate_kurui.zip
           cd ..
 
       - name: Upload Artifact
@@ -111,7 +121,7 @@ jobs:
           name: trimui_kurui-${{ steps.versioning.outputs.tag }}
           path: |
             trimui_kurui.zip
-            TrimuiUpdate_KURUI.zip
+            TrimuiUpdate_kurui.zip
           retention-days: 30
 
       - name: Create Git Tag and GitHub Release
@@ -124,8 +134,10 @@ jobs:
             ### KURUI ${{ steps.versioning.outputs.tag }}
             TRIMUI Model S (Powkiddy A66) 向けカスタムランチャー自動ビルドリリース
 
-            - **ターゲット**: Allwinner F1C100s (ARMv5TE)
-            - **起動方法**: `TrimuiUpdate_KURUI.zip` をSDカードに入れて、TRIMUI の「FILE」メニューからポチッと実行するだけで即時起動します！
+            - **ターゲット**: Allwinner F1C100s (ARMv5TE / GLIBC 2.4+ 互換)
+            - **起動方法**:
+              - **FW 0.106 以降 (標準)**: `trimui_kurui.zip` をSDカードに入れて「FILE」メニューから実行
+              - **FW 0.105 以前**: `TrimuiUpdate_kurui.zip` をSDカードに入れて「FILE」メニューから実行
           files: |
             trimui_kurui.zip
-            TrimuiUpdate_KURUI.zip
+            TrimuiUpdate_kurui.zip

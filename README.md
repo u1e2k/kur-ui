@@ -100,19 +100,15 @@ make strip CROSS_COMPILE=arm-linux-gnueabi-
 
 ## 実機への導入手順
 
-### 方法A: 自動インストーラーを使う場合（推奨）
-1. 配布パッケージ（`trimui_kurui.zip`）を解凍します。
-2. 解凍されたファイル群（`updater`, `trimui_init.sh`, `apps/`）を MicroSD カードの**最上位（ルート）**にコピーします。
-   ※ 公式アップデート検知（`updater`）により、本体起動時に自動実行されます。
-3. MicroSD カードを TRIMUI Model S に挿入し、電源を入れます。
-4. アップデート画面が走り、自動的に再起動して KURUI が起動します。
+### 方法A: TRIMUI「FILE」メニューから起動する場合（最も簡単・推奨）
+1. 配布パッケージから **`trimui_kurui.zip`**（FW 0.106以降）または `TrimuiUpdate_kurui.zip`（FW 0.105以前）を MicroSD カードにコピーします。
+2. TRIMUI Model S を起動し、「FILE」メニューを開いて `trimui_kurui.zip` を選択し、**Aボタン**を押します。
+3. 画面が切り替わり、KURUI がその場で起動します！
 
-### 方法B: 手動で配置する場合
-1. MicroSD カード内に以下のパスで配置します:
-   - `/mnt/SDCARD/apps/kurui/kurui` (実行バイナリ)
-   - `/mnt/SDCARD/trimui_init.sh` (起動フックスクリプト)
-2. 本体を起動すると、内蔵メニューの代わりに KURUI が優先起動します。
-   （元の公式メニューに戻したい場合は、SDカード直下の `trimui_init.sh` を削除またはリネームしてください）
+### 方法B: 電源ON時に自動起動させる場合
+1. `Apps/kurui/kurui` を MicroSD カードの `/mnt/SDCARD/Apps/kurui/kurui` に配置します。
+2. `trimui_init.sh` を MicroSD カード直下（`/mnt/SDCARD/trimui_init.sh`）に配置します。
+3. 次回から電源を入れると、KURUI が優先起動します。
 
 ---
 
