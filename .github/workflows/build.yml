@@ -68,7 +68,8 @@ jobs:
           void SDL_UnlockAudio(void) {}
           char *SDL_GetError(void) { return ""; }
           EOF
-          arm-linux-gnueabi-gcc -shared -fPIC -o /tmp/sdl_arm/libSDL.so /tmp/stub_sdl.c
+          arm-linux-gnueabi-gcc -shared -fPIC -Wl,-soname,libSDL-1.2.so.0 -o /tmp/sdl_arm/libSDL-1.2.so.0 /tmp/stub_sdl.c
+          ln -s /tmp/sdl_arm/libSDL-1.2.so.0 /tmp/sdl_arm/libSDL.so
 
       - name: Build KURUI for TRIMUI Model S
         run: |

@@ -69,10 +69,14 @@ else
     cat << 'EOF' > "$SD_ROOT/trimui_init.sh"
 #!/bin/sh
 APP_DIR="/mnt/SDCARD/apps/kurui"
+LOG_FILE="/mnt/SDCARD/kurui.log"
+export LD_LIBRARY_PATH="/usr/lib:/usr/trimui/lib:/mnt/SDCARD/apps/kurui:$LD_LIBRARY_PATH"
 if [ -d "$APP_DIR" ] && [ -f "$APP_DIR/kurui" ]; then
     cd "$APP_DIR"
     chmod +x ./kurui
-    exec ./kurui
+    echo "=== KURUI LAUNCH ATTEMPT ===" > "$LOG_FILE"
+    ./kurui >> "$LOG_FILE" 2>&1
+    sync
 fi
 if [ -f "/usr/trimui/bin/MainUI" ]; then
     exec /usr/trimui/bin/MainUI

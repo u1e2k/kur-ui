@@ -12,7 +12,8 @@ ifeq ($(CC),gcc)
     SDL_CFLAGS ?= $(shell sdl-config --cflags 2>/dev/null || echo -I/usr/include/SDL -D_GNU_SOURCE=1 -D_REENTRANT)
     SDL_LIBS ?= $(shell sdl-config --libs 2>/dev/null || echo -lSDL -lpthread)
 else
-    # Default paths for Debian armel multiarch
+    # Default paths for ARM (TRIMUI Model S / Allwinner F1C100s ARM926EJ-S)
+    CFLAGS += -mcpu=arm926ej-s -mtune=arm926ej-s
     SDL_CFLAGS ?= -I/usr/include/SDL -D_GNU_SOURCE=1 -D_REENTRANT
     SDL_LIBS ?= -L/usr/lib/arm-linux-gnueabi -lSDL -lpthread
 endif
