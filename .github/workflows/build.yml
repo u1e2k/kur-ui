@@ -13,9 +13,11 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    # Use Debian Bullseye (GLIBC 2.31) to maintain binary compatibility with TrimUI stock GLIBC 2.4
+    # Use Ubuntu 20.04 (Focal / GLIBC 2.31) to guarantee backward compatibility with TrimUI stock GLIBC
     container:
-      image: debian:bullseye-slim
+      image: ubuntu:20.04
+    env:
+      DEBIAN_FRONTEND: noninteractive
 
     steps:
       - name: Install dependencies
@@ -23,7 +25,6 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends \
             gcc-arm-linux-gnueabi \
-            libc6-dev-armel-cross \
             make \
             zip \
             git \
@@ -87,7 +88,7 @@ jobs:
           make CC=arm-linux-gnueabi-gcc \
                VERSION_TAG="${{ steps.versioning.outputs.tag }}" \
                EXTRA_CFLAGS="-I/usr/include/SDL -D_GNU_SOURCE=1 -D_REENTRANT" \
-               EXTRA_LIBS="-L/tmp/sdl_arm -lSDL -lpthread"
+               EXTRA_LIBS="-L/tmp/sdl_arm -lSDL -Wl,--as-needed"
           arm-linux-gnueabi-strip kurui
 
       - name: Package Release
